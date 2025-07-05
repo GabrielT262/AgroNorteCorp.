@@ -177,12 +177,14 @@ export interface GalleryPost {
 
 export interface ManagedUser {
   id: string;
+  username: string;
   name: string;
+  lastName: string;
+  email: string;
   role: UserRole;
   area: UserArea;
-  password?: string; // Should be handled securely, but for proto it's fine.
+  password?: string;
   signatureUrl?: string;
-  whatsappNumber?: string;
 }
 
 export interface CompanySettings {

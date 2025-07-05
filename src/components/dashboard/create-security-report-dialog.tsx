@@ -5,7 +5,7 @@ import * as React from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useSecurity } from '@/context/security-context';
+import { createSecurityReportAction } from '@/app/actions/security-actions';
 import type { SecurityReport } from '@/lib/types';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, X, Paperclip } from 'lucide-react';
+import { Upload, X, Loader2 } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
 
 const reportTypes: SecurityReport['type'][] = ['Novedad', 'Incidente', 'Solicitud de Permiso', 'Ingreso de Proveedor'];
@@ -44,9 +44,9 @@ interface CreateSecurityReportDialogProps {
 }
 
 export function CreateSecurityReportDialog({ isOpen, onOpenChange }: CreateSecurityReportDialogProps) {
-  const { addReport } = useSecurity();
   const { toast } = useToast();
   const [photos, setPhotos] = React.useState<File[]>([]);
+  const [isSubmitting, startSubmitTransition] = React.useTransition();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -77,11 +77,14 @@ export function CreateSecurityReportDialog({ isOpen, onOpenChange }: CreateSecur
   }
 
   const onSubmit = (data: FormValues) => {
-    const reportData: Omit<SecurityReport, 'id' | 'date' | 'author'> = {
+    // In a real app, file upload would happen here, returning URLs.
+    // For the prototype, we'll pass empty arrays.
+    const photoUrls: string[] = []; 
+
+    const reportData: Omit<SecurityReport, 'id' | 'date' | 'author' | 'photos'> = {
         title: data.title,
         description: data.description,
         type: data.type,
-        photos: [], // Placeholder for uploaded photo URLs
         status: data.type === 'Solicitud de Permiso' ? 'Aprobación Pendiente' : 'Abierto',
     };
     
@@ -91,8 +94,15 @@ export function CreateSecurityReportDialog({ isOpen, onOpenChange }: CreateSecur
         reportData.meta = { targetArea: 'Almacén', details: data.metaDetails! };
     }
 
-    addReport(reportData);
-    onOpenChange(false);
+    startSubmitTransition(async () => {
+        const result = await createSecurityReportAction(reportData, photoUrls);
+        if (result.success) {
+            toast({ title: "Reporte Creado", description: "El reporte de seguridad ha sido guardado." });
+            onOpenChange(false);
+        } else {
+            toast({ title: "Error", description: result.message || "No se pudo crear el reporte.", variant: "destructive" });
+        }
+    });
   };
 
   return (
@@ -172,7 +182,10 @@ export function CreateSecurityReportDialog({ isOpen, onOpenChange }: CreateSecur
             </ScrollArea>
             <DialogFooter className="pt-4 mt-4 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit">Guardar Reporte</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Guardar Reporte
+              </Button>
             </DialogFooter>
           </form>
         </Form>

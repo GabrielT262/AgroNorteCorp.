@@ -10,7 +10,7 @@ import type { GalleryPost } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
-import { Check, User, Calendar, X, BadgeInfo, Building2 } from 'lucide-react';
+import { Check, User, Calendar, X, Loader2, Building2 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -20,9 +20,10 @@ interface GalleryCardProps {
     showApprovalActions?: boolean;
     onApprove?: () => void;
     onReject?: () => void;
+    isPending?: boolean;
 }
 
-export function GalleryCard({ post, showApprovalActions = false, onApprove, onReject }: GalleryCardProps) {
+export function GalleryCard({ post, showApprovalActions = false, onApprove, onReject, isPending }: GalleryCardProps) {
     const allImages = post.images && post.images.length > 0 ? post.images : ['https://placehold.co/600x400.png'];
     const aiHint = post.aiHint || 'achievement celebration';
 
@@ -81,12 +82,12 @@ export function GalleryCard({ post, showApprovalActions = false, onApprove, onRe
             </CardContent>
             {showApprovalActions && post.status === 'Pendiente' && (
                 <CardFooter className="flex gap-2">
-                     <Button onClick={onReject} variant="outline" className="w-full">
-                        <X className="mr-2 h-4 w-4" />
+                     <Button onClick={onReject} variant="outline" className="w-full" disabled={isPending}>
+                        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="mr-2 h-4 w-4" />}
                         Rechazar
                     </Button>
-                    <Button onClick={onApprove} className="w-full bg-green-600 hover:bg-green-700">
-                        <Check className="mr-2 h-4 w-4" />
+                    <Button onClick={onApprove} className="w-full bg-green-600 hover:bg-green-700" disabled={isPending}>
+                        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                         Aprobar
                     </Button>
                 </CardFooter>

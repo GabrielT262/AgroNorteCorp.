@@ -27,12 +27,14 @@ export const inventoryItems = pgTable('inventory_items', {
 // ===================
 export const users = pgTable('users', {
     id: varchar('id', { length: 255 }).primaryKey(),
+    username: varchar('username', { length: 50 }).notNull().unique(),
     name: varchar('name', { length: 255 }).notNull(),
+    lastName: varchar('last_name', { length: 255 }).notNull(),
+    email: varchar('email', { length: 255 }).notNull().unique(),
     role: varchar('role', { length: 50 }).notNull(),
     area: varchar('area', { length: 50 }).notNull(),
     password: text('password').notNull(),
     signatureUrl: varchar('signature_url', { length: 255 }),
-    whatsappNumber: varchar('whatsapp_number', { length: 50 }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -104,6 +106,15 @@ export const galleryPosts = pgTable('gallery_posts', {
 // ===================
 // SEGURIDAD
 // ===================
+export const registeredVehicles = pgTable('registered_vehicles', {
+    id: varchar('id', { length: 255 }).primaryKey(),
+    employeeName: varchar('employee_name', { length: 255 }).notNull().unique(),
+    employeeArea: varchar('employee_area', { length: 50 }).notNull(),
+    vehicleType: varchar('vehicle_type', { length: 100 }).notNull(),
+    vehicleModel: varchar('vehicle_model', { length: 100 }).notNull(),
+    vehiclePlate: varchar('vehicle_plate', { length: 20 }).notNull(),
+});
+
 export const securityReports = pgTable('security_reports', {
     id: varchar('id', { length: 255 }).primaryKey(),
     date: timestamp('date').defaultNow().notNull(),

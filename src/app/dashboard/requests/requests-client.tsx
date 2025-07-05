@@ -22,7 +22,7 @@ import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, Truck, X, Printer, Loader2 } from "lucide-react";
 import { PrintReceiptDialog } from "@/components/dashboard/print-receipt-dialog";
-import { approveOrderAction, rejectOrderAction, dispatchOrderAction } from '../actions/order-actions';
+import { approveOrderAction, rejectOrderAction, dispatchOrderAction } from '@/app/actions/order-actions';
 
 
 const statusBadgeVariant: {[key in RecentOrder['status']]: BadgeProps['variant']} = {

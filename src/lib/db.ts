@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { eq, and, sql, desc, gte, lte, or } from 'drizzle-orm';
 import * as schema from './schema';
-import type { InventoryItem, RecentOrder, ManagedUser, SecurityReport, GalleryPost, Communication, FuelHistoryEntry, UserArea } from './types';
+import type { InventoryItem, RecentOrder, ManagedUser, SecurityReport, GalleryPost, Communication, FuelHistoryEntry, UserArea, RegisteredVehicle } from './types';
 
 if (!process.env.DATABASE_URL) {
   // throw new Error('DATABASE_URL environment variable is not set. Please add it to your .env file.');
@@ -105,6 +105,11 @@ export async function getGalleryPosts(): Promise<GalleryPost[]> {
 export async function getSecurityReports(): Promise<SecurityReport[]> {
     return getAllFromTable<SecurityReport>('securityReports');
 }
+
+export async function getRegisteredVehicles(): Promise<RegisteredVehicle[]> {
+    return getAllFromTable<RegisteredVehicle>('registeredVehicles');
+}
+
 
 // FUEL
 export async function getFuelHistory(): Promise<FuelHistoryEntry[]> {

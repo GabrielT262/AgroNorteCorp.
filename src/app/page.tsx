@@ -16,11 +16,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Leaf, AlertCircle, Eye, EyeOff, Loader2, Phone } from "lucide-react";
+import { Leaf, AlertCircle, Eye, EyeOff, Loader2, Mail, User, AtSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { registerUserAction } from "./actions/user-actions";
+import { loginUserAction } from "./actions/auth-actions";
 
 const loginFormSchema = z.object({
-  username: z.string().min(1, { message: "El usuario es requerido." }),
+  credential: z.string().min(1, { message: "Por favor, introduce tu correo o usuario." }),
   password: z.string().min(1, { message: "La contraseña es requerida." }),
   rememberMe: z.boolean().default(false).optional(),
 });
@@ -28,8 +30,10 @@ const loginFormSchema = z.object({
 type LoginFormValues = z.infer<typeof loginFormSchema>;
 
 const registerFormSchema = z.object({
-  username: z.string().min(3, { message: "El usuario debe tener al menos 3 caracteres." }),
-  whatsappNumber: z.string().min(9, { message: "El número de WhatsApp debe tener al menos 9 dígitos." }),
+  name: z.string().min(2, { message: "El nombre debe tener al menos 2 caracteres." }),
+  lastName: z.string().min(2, { message: "El apellido debe tener al menos 2 caracteres." }),
+  username: z.string().min(3, { message: "El usuario debe tener al menos 3 caracteres." }).regex(/^[a-zA-Z0-9_.-]+$/, "Solo letras, números, puntos, guiones y guiones bajos."),
+  email: z.string().email({ message: "Por favor, introduce un correo electrónico válido." }),
   password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }),
   confirmPassword: z.string()
 }).refine(data => data.password === data.confirmPassword, {
@@ -40,7 +44,7 @@ const registerFormSchema = z.object({
 type RegisterFormValues = z.infer<typeof registerFormSchema>;
 
 const forgotPasswordSchema = z.object({
-  username: z.string().min(1, { message: "El usuario para recuperar es requerido." }),
+  email: z.string().email({ message: "El correo para recuperar es requerido." }),
 });
 
 type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
@@ -62,17 +66,17 @@ export default function LoginPage() {
 
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
-    defaultValues: { username: "", password: "", rememberMe: false },
+    defaultValues: { credential: "", password: "", rememberMe: false },
   });
   
   const registerForm = useForm<RegisterFormValues>({
     resolver: zodResolver(registerFormSchema),
-    defaultValues: { username: "", whatsappNumber: "", password: "", confirmPassword: "" },
+    defaultValues: { name: "", lastName: "", username: "", email: "", password: "", confirmPassword: "" },
   });
   
   const forgotPasswordForm = useForm<ForgotPasswordFormValues>({
     resolver: zodResolver(forgotPasswordSchema),
-    defaultValues: { username: "" },
+    defaultValues: { email: "" },
   });
 
   React.useEffect(() => {
@@ -97,40 +101,50 @@ export default function LoginPage() {
   const handleLogin = async (data: LoginFormValues) => {
     setIsLoading(true);
     setError(null);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    if (data.username === "Gabriel T" && data.password === "003242373") {
+
+    const result = await loginUserAction(data);
+    
+    setIsLoading(false);
+
+    if (result.success) {
       toast({ title: "Inicio de Sesión Exitoso", description: "Bienvenido de vuelta." });
       router.push("/dashboard");
     } else {
-      setError("Usuario o contraseña incorrectos. Por favor, inténtalo de nuevo.");
-      setIsLoading(false);
+      setError(result.message || "Credenciales incorrectas. Por favor, inténtalo de nuevo.");
     }
   };
 
   const handleRegister = async (data: RegisterFormValues) => {
     setIsLoading(true);
     setError(null);
-    await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // En una aplicación real, esto crearía un usuario con estado 'pendiente'
-    // y notificaría al administrador para su aprobación.
-    console.log("Solicitud de registro:", data);
-    
-    toast({ 
-      title: "Solicitud de Registro Enviada", 
-      description: "Tu solicitud ha sido enviada. Un administrador la revisará y activará tu cuenta pronto." 
+    const result = await registerUserAction({
+      name: data.name,
+      lastName: data.lastName,
+      username: data.username,
+      email: data.email,
+      password: data.password,
     });
-
+    
     setIsLoading(false);
-    registerForm.reset();
-    setActiveTab("login"); // Volver a la pestaña de inicio de sesión
+
+    if (result.success) {
+        toast({ 
+          title: "Solicitud de Registro Enviada", 
+          description: "Tu solicitud ha sido enviada. Un administrador la revisará y activará tu cuenta pronto." 
+        });
+        registerForm.reset();
+        setActiveTab("login");
+    } else {
+        setError(result.message || "No se pudo completar el registro.");
+    }
   };
   
   const onForgotPasswordSubmit = (data: ForgotPasswordFormValues) => {
-    console.log("Forgot password for:", data.username);
+    console.log("Forgot password for:", data.email);
     toast({
       title: "Solicitud Enviada",
-      description: `Se ha enviado una solicitud al administrador para restablecer la contraseña del usuario ${data.username}.`,
+      description: `Se ha enviado una solicitud al administrador para restablecer la contraseña del usuario con correo ${data.email}.`,
     });
     setForgotPasswordOpen(false);
     forgotPasswordForm.reset();
@@ -174,11 +188,16 @@ export default function LoginPage() {
                             )}
                             <FormField
                                 control={loginForm.control}
-                                name="username"
+                                name="credential"
                                 render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Usuario</FormLabel>
-                                    <FormControl><Input placeholder="Tu nombre de usuario" {...field} /></FormControl>
+                                    <FormLabel>Correo o Usuario</FormLabel>
+                                    <FormControl>
+                                      <div className="relative">
+                                          <AtSign className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                          <Input placeholder="tu@correo.com o tu_usuario" {...field} className="pl-8" />
+                                      </div>
+                                    </FormControl>
                                     <FormMessage />
                                 </FormItem>
                                 )}
@@ -209,7 +228,7 @@ export default function LoginPage() {
                                     <FormItem className="flex flex-row items-center space-x-2 space-y-0">
                                     <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                                     <div className="space-y-1 leading-none">
-                                        <FormLabel className="font-normal cursor-pointer">Guardar contraseña</FormLabel>
+                                        <FormLabel className="font-normal cursor-pointer">Recordar sesión</FormLabel>
                                     </div>
                                     </FormItem>
                                 )}
@@ -229,30 +248,70 @@ export default function LoginPage() {
                 </TabsContent>
                 <TabsContent value="register">
                      <Form {...registerForm}>
-                    <form onSubmit={registerForm.handleSubmit(handleRegister)}>
+                    <form onSubmit={registerForm.handleSubmit(handleRegister)} className="space-y-4">
                         <CardContent className="space-y-4">
                             <CardDescription className="text-center">Tu solicitud será revisada por un administrador.</CardDescription>
-                            <FormField
+                            {error && (
+                                <Alert variant="destructive">
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertTitle>Error en el Registro</AlertTitle>
+                                <AlertDescription>{error}</AlertDescription>
+                                </Alert>
+                            )}
+                             <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                    control={registerForm.control}
+                                    name="name"
+                                    render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Nombre</FormLabel>
+                                        <FormControl>
+                                        <Input placeholder="Tu nombre" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={registerForm.control}
+                                    name="lastName"
+                                    render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Apellidos</FormLabel>
+                                        <FormControl>
+                                        <Input placeholder="Tus apellidos" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                    )}
+                                />
+                             </div>
+                             <FormField
                                 control={registerForm.control}
                                 name="username"
                                 render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Usuario</FormLabel>
-                                    <FormControl><Input placeholder="Elige un nombre de usuario" {...field} /></FormControl>
+                                    <FormLabel>Nombre de Usuario</FormLabel>
+                                    <FormControl>
+                                      <div className="relative">
+                                        <AtSign className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <Input placeholder="tu_usuario_unico" {...field} className="pl-8" />
+                                      </div>
+                                    </FormControl>
                                     <FormMessage />
                                 </FormItem>
                                 )}
                             />
                             <FormField
                                 control={registerForm.control}
-                                name="whatsappNumber"
+                                name="email"
                                 render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Número de WhatsApp</FormLabel>
+                                    <FormLabel>Correo Electrónico</FormLabel>
                                     <FormControl>
                                         <div className="relative">
-                                            <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                            <Input type="tel" placeholder="987654321" {...field} className="pl-8"/>
+                                            <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input type="email" placeholder="tu@correo.com" {...field} className="pl-8"/>
                                         </div>
                                     </FormControl>
                                     <FormMessage />
@@ -298,19 +357,19 @@ export default function LoginPage() {
                 <DialogHeader>
                     <DialogTitle>Recuperar Contraseña</DialogTitle>
                     <DialogDescription>
-                    Ingresa tu nombre de usuario. Se enviará una solicitud al administrador para restablecer tu contraseña.
+                    Ingresa tu correo electrónico. Se enviará una solicitud al administrador para restablecer tu contraseña.
                     </DialogDescription>
                 </DialogHeader>
                 <Form {...forgotPasswordForm}>
                     <form onSubmit={forgotPasswordForm.handleSubmit(onForgotPasswordSubmit)} className="space-y-4 py-4">
                         <FormField
                             control={forgotPasswordForm.control}
-                            name="username"
+                            name="email"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Nombre de Usuario</FormLabel>
+                                <FormLabel>Correo Electrónico</FormLabel>
                                 <FormControl>
-                                    <Input placeholder="Tu nombre de usuario" {...field} />
+                                    <Input placeholder="tu@correo.com" {...field} />
                                 </FormControl>
                                 <FormMessage />
                                 </FormItem>

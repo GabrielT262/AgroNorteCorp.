@@ -32,7 +32,7 @@ import type { User, ExpiringProduct, RecentOrder, InventoryItem } from '@/lib/ty
 import Link from 'next/link';
 import { differenceInDays, parseISO } from 'date-fns';
 import { getDashboardData } from '@/lib/db';
-import { approveOrderAction } from '../actions/order-actions';
+import { approveOrderAction } from '@/app/actions/order-actions';
 import { ApproveOrderButton } from './approve-order-button';
 
 const AdminDashboard = async () => {

@@ -5,8 +5,8 @@ import * as React from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useSecurity } from '@/context/security-context';
-import type { UserArea } from '@/lib/types';
+import { registerVehicleEntryAction, findVehicleByEmployeeNameAction } from '@/app/actions/security-actions';
+import type { UserArea, RegisteredVehicle } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -15,8 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ScrollArea } from '../ui/scroll-area';
-import { Upload, X } from 'lucide-react';
+import { Upload, X, Loader2 } from 'lucide-react';
 
 const userAreas: UserArea[] = ['Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG', 'Administrador'];
 
@@ -36,9 +35,9 @@ interface RegisterVehicleEntryDialogProps {
 }
 
 export function RegisterVehicleEntryDialog({ isOpen, onOpenChange }: RegisterVehicleEntryDialogProps) {
-  const { registeredVehicles, addVehicleEntry } = useSecurity();
   const { toast } = useToast();
   const [photo, setPhoto] = React.useState<File | null>(null);
+  const [isSubmitting, startSubmitTransition] = React.useTransition();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -61,11 +60,11 @@ export function RegisterVehicleEntryDialog({ isOpen, onOpenChange }: RegisterVeh
     setPhoto(null);
   }
 
-  const handleNameBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+  const handleNameBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     const name = e.target.value;
     if (!name) return;
 
-    const existingVehicle = registeredVehicles.find(v => v.employeeName.toLowerCase() === name.toLowerCase());
+    const existingVehicle = await findVehicleByEmployeeNameAction(name);
     if (existingVehicle) {
       form.setValue('employeeArea', existingVehicle.employeeArea);
       form.setValue('vehicleType', existingVehicle.vehicleType);
@@ -76,8 +75,18 @@ export function RegisterVehicleEntryDialog({ isOpen, onOpenChange }: RegisterVeh
   };
 
   const onSubmit = (data: FormValues) => {
-    addVehicleEntry(data, photo);
-    onOpenChange(false);
+    // In a real app, upload photo and get URL
+    const photoUrl: string | null = null;
+
+    startSubmitTransition(async () => {
+        const result = await registerVehicleEntryAction(data, photoUrl);
+        if (result.success) {
+            toast({ title: "Ingreso Registrado", description: `El ingreso vehicular de ${data.employeeName} ha sido registrado.` });
+            onOpenChange(false);
+        } else {
+            toast({ title: "Error", description: result.message || "No se pudo registrar el ingreso.", variant: "destructive" });
+        }
+    });
   };
 
   return (
@@ -152,7 +161,10 @@ export function RegisterVehicleEntryDialog({ isOpen, onOpenChange }: RegisterVeh
             </div>
             <DialogFooter className="pt-6">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit">Registrar Ingreso</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Registrar Ingreso
+              </Button>
             </DialogFooter>
           </form>
         </Form>

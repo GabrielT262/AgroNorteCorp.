@@ -1,15 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { useUsers } from '@/context/users-context';
 import type { ManagedUser } from '@/lib/types';
-import Link from 'next/link';
+import { useToast } from '@/hooks/use-toast';
+import { deleteUserAction } from '@/app/actions/user-actions';
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, MoreVertical, Pencil, Trash2, MessageSquare } from 'lucide-react';
+import { PlusCircle, MoreVertical, Pencil, Trash2, Loader2, Mail } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
@@ -23,11 +23,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CreateUserDialog } from './create-user-dialog';
 
-export function ManageUsersClient() {
-  const { users, deleteUser } = useUsers();
+interface ManageUsersClientProps {
+  initialUsers: ManagedUser[];
+}
+
+export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
+  const [users, setUsers] = React.useState(initialUsers);
+  const { toast } = useToast();
   const [isCreateDialogOpen, setCreateDialogOpen] = React.useState(false);
   const [editingUser, setEditingUser] = React.useState<ManagedUser | null>(null);
   const [deletingUser, setDeletingUser] = React.useState<ManagedUser | null>(null);
+  const [isPending, startTransition] = React.useTransition();
 
   const handleOpenCreateDialog = () => {
     setEditingUser(null);
@@ -41,15 +47,23 @@ export function ManageUsersClient() {
 
   const handleDeleteConfirm = () => {
     if (!deletingUser) return;
-    deleteUser(deletingUser.id);
-    setDeletingUser(null);
+    startTransition(async () => {
+      const result = await deleteUserAction(deletingUser.id);
+      if (result.success) {
+        toast({ title: 'Usuario Eliminado', description: `El usuario "${deletingUser.name}" ha sido eliminado.`});
+      } else {
+        toast({ title: 'Error', description: result.message, variant: 'destructive' });
+      }
+      setDeletingUser(null);
+    });
   };
 
-  const handleNotifyByWhatsapp = (user: ManagedUser) => {
-    if (!user.whatsappNumber) return;
-    const message = encodeURIComponent(`Hola ${user.name}, tu cuenta en AgroNorte Corp ha sido aprobada. Ya puedes iniciar sesión.`);
-    const whatsappLink = `https://wa.me/${user.whatsappNumber.replace(/\D/g, '')}?text=${message}`;
-    window.open(whatsappLink, '_blank');
+  const handleNotifyByEmail = (user: ManagedUser) => {
+    if (!user.email) return;
+    const subject = encodeURIComponent(`Tu cuenta en AgroNorte Corp ha sido aprobada`);
+    const body = encodeURIComponent(`Hola ${user.name},\n\nTu cuenta en AgroNorte Corp ha sido aprobada. Ya puedes iniciar sesión.`);
+    const mailtoLink = `mailto:${user.email}?subject=${subject}&body=${body}`;
+    window.open(mailtoLink, '_blank');
   };
 
   return (
@@ -76,45 +90,52 @@ export function ManageUsersClient() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Usuario</TableHead>
                     <TableHead>Nombre</TableHead>
+                    <TableHead>Apellidos</TableHead>
+                    <TableHead>Correo Electrónico</TableHead>
                     <TableHead>Área</TableHead>
                     <TableHead>Rol</TableHead>
-                    <TableHead>WhatsApp</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map(user => (
                     <TableRow key={user.id}>
+                      <TableCell className="font-mono">{user.username}</TableCell>
                       <TableCell className="font-medium">{user.name}</TableCell>
+                      <TableCell>{user.lastName}</TableCell>
+                      <TableCell>{user.email}</TableCell>
                       <TableCell>{user.area}</TableCell>
                       <TableCell><Badge variant={user.role === 'Administrador' ? 'default' : 'secondary'}>{user.role}</Badge></TableCell>
-                      <TableCell>{user.whatsappNumber || '-'}</TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEdit(user)}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              <span>Editar</span>
-                            </DropdownMenuItem>
-                            {user.whatsappNumber && (
-                              <DropdownMenuItem onClick={() => handleNotifyByWhatsapp(user)}>
-                                <MessageSquare className="mr-2 h-4 w-4" />
-                                <span>Notificar Aprobación</span>
+                        {isPending && <Loader2 className="h-4 w-4 animate-spin ml-auto" />}
+                        {!isPending && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEdit(user)}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                <span>Editar</span>
                               </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setDeletingUser(user)} className="text-destructive focus:text-destructive" disabled={user.role === 'Administrador'}>
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              <span>Eliminar</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              {user.email && (
+                                <DropdownMenuItem onClick={() => handleNotifyByEmail(user)}>
+                                  <Mail className="mr-2 h-4 w-4" />
+                                  <span>Notificar Aprobación</span>
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => setDeletingUser(user)} className="text-destructive focus:text-destructive" disabled={user.role === 'Administrador'}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                <span>Eliminar</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -136,7 +157,7 @@ export function ManageUsersClient() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. Esto eliminará permanentemente al usuario "{deletingUser?.name}".
+              Esta acción no se puede deshacer. Esto eliminará permanentemente al usuario "{deletingUser?.name} {deletingUser?.lastName}".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -6,24 +6,24 @@ import Image from 'next/image';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { SecurityReport, User } from '@/lib/types';
-import { useSecurity } from '@/context/security-context';
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
-import { AlertCircle, CheckCircle, Clock, Forward, MessageSquare, Tractor, XCircle, Car } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Forward, MessageSquare, Tractor, XCircle, Car, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 
 interface SecurityReportCardProps {
     report: SecurityReport;
     currentUser: User;
+    onApprove: () => void;
+    onReject: () => void;
+    isPending: boolean;
 }
 
-export function SecurityReportCard({ report, currentUser }: SecurityReportCardProps) {
-    const { approveRequest, rejectRequest } = useSecurity();
-
+export function SecurityReportCard({ report, currentUser, onApprove, onReject, isPending }: SecurityReportCardProps) {
     const canApprove = (currentUser.area === 'Gerencia' || currentUser.role === 'Administrador');
 
     const typeInfo = {
@@ -46,11 +46,11 @@ export function SecurityReportCard({ report, currentUser }: SecurityReportCardPr
     const { icon: StatusIcon, color: statusColor } = statusInfo[report.status];
 
     const handleApprove = () => {
-        approveRequest(report.id);
+        onApprove();
     }
 
     const handleReject = () => {
-        rejectRequest(report.id);
+        onReject();
     }
 
     return (
@@ -109,12 +109,12 @@ export function SecurityReportCard({ report, currentUser }: SecurityReportCardPr
             <CardFooter className="flex gap-2">
                  {report.type === 'Solicitud de Permiso' && report.status === 'Aprobación Pendiente' && canApprove && (
                     <>
-                        <Button onClick={handleReject} variant="outline" className="w-full">
-                            <XCircle className="mr-2 h-4 w-4" />
+                        <Button onClick={handleReject} variant="outline" className="w-full" disabled={isPending}>
+                            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
                             Rechazar
                         </Button>
-                        <Button onClick={handleApprove} className="w-full">
-                            <CheckCircle className="mr-2 h-4 w-4" />
+                        <Button onClick={handleApprove} className="w-full" disabled={isPending}>
+                            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                             Aprobar
                         </Button>
                     </>

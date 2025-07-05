@@ -1,12 +1,12 @@
 import { ManageUsersClient } from '@/components/dashboard/manage-users-client';
+import { getUsers } from '@/lib/db';
 
-export default function ManageUsersPage() {
-  // In a real app, you'd fetch this data securely.
-  // For this prototype, we'll use the data from the context on the client.
+export default async function ManageUsersPage() {
+  const users = await getUsers();
   
   return (
     <div className="h-full">
-      <ManageUsersClient />
+      <ManageUsersClient initialUsers={users} />
     </div>
   );
 }

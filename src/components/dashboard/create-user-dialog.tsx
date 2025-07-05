@@ -4,9 +4,10 @@ import * as React from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useUsers } from '@/context/users-context';
 import type { ManagedUser, UserArea, UserRole } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { createUserAction, updateUserAction } from '@/app/actions/user-actions';
+import { Loader2 } from 'lucide-react';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -18,10 +19,12 @@ const userAreas: UserArea[] = ['Gerencia', 'Logística', 'RR.HH', 'Seguridad Pat
 const userRoles: UserRole[] = ['Usuario', 'Administrador'];
 
 const formSchema = z.object({
-  name: z.string().min(3, 'El nombre debe tener al menos 3 caracteres.'),
+  username: z.string().min(3, 'El usuario debe tener al menos 3 caracteres.'),
+  name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.'),
+  lastName: z.string().min(2, 'El apellido debe tener al menos 2 caracteres.'),
+  email: z.string().email('Debe ser un correo electrónico válido.'),
   area: z.enum(userAreas, { required_error: 'Debe seleccionar un área.' }),
   role: z.enum(userRoles, { required_error: 'Debe seleccionar un rol.' }),
-  whatsappNumber: z.string().optional(),
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres.').optional().or(z.literal('')),
   confirmPassword: z.string().optional(),
 }).refine(data => {
@@ -43,9 +46,9 @@ interface CreateUserDialogProps {
 }
 
 export function CreateUserDialog({ isOpen, onOpenChange, initialData }: CreateUserDialogProps) {
-  const { addUser, updateUser } = useUsers();
   const { toast } = useToast();
   const isEditMode = !!initialData;
+  const [isSubmitting, startSubmitTransition] = React.useTransition();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -55,48 +58,65 @@ export function CreateUserDialog({ isOpen, onOpenChange, initialData }: CreateUs
     if (isOpen) {
       if (isEditMode && initialData) {
         form.reset({
+          username: initialData.username,
           name: initialData.name,
+          lastName: initialData.lastName,
+          email: initialData.email,
           area: initialData.area,
           role: initialData.role,
-          whatsappNumber: initialData.whatsappNumber || '',
           password: '',
           confirmPassword: '',
         });
       } else {
-        form.reset({ name: '', area: undefined, role: undefined, whatsappNumber: '', password: '', confirmPassword: '' });
+        form.reset({ username: '', name: '', lastName: '', email: '', area: undefined, role: undefined, password: '', confirmPassword: '' });
       }
     }
   }, [isOpen, isEditMode, initialData, form]);
   
   const onSubmit = (data: FormValues) => {
-    if (!isEditMode && !data.password) {
-        toast({ title: 'Contraseña requerida', description: 'Debe establecer una contraseña para el nuevo usuario.', variant: 'destructive' });
-        return;
-    }
-    
-    if (isEditMode && initialData) {
-        const updateData: ManagedUser = {
-            id: initialData.id,
-            name: data.name,
-            area: data.area,
-            role: data.role,
-            whatsappNumber: data.whatsappNumber,
-        };
-        if (data.password) {
-            updateData.password = data.password;
-        }
-        updateUser(updateData);
-    } else {
-        addUser({
-            name: data.name,
-            area: data.area,
-            role: data.role,
-            whatsappNumber: data.whatsappNumber,
-            password: data.password!,
-        });
-    }
+    startSubmitTransition(async () => {
+      let result;
+      if (isEditMode && initialData) {
+          const updateData: Partial<Omit<ManagedUser, 'id'>> = {
+              username: data.username,
+              name: data.name,
+              lastName: data.lastName,
+              email: data.email,
+              area: data.area,
+              role: data.role,
+          };
+          if (data.password) {
+              updateData.password = data.password;
+          }
+          result = await updateUserAction(initialData.id, updateData);
+          if (result.success) {
+            toast({ title: 'Usuario Actualizado', description: 'Los datos del usuario han sido guardados.' });
+          }
+      } else {
+          if (!data.password) {
+              toast({ title: 'Contraseña requerida', description: 'Debe establecer una contraseña para el nuevo usuario.', variant: 'destructive' });
+              return;
+          }
+          result = await createUserAction({
+              username: data.username,
+              name: data.name,
+              lastName: data.lastName,
+              email: data.email,
+              area: data.area,
+              role: data.role,
+              password: data.password!,
+          });
+           if (result.success) {
+            toast({ title: 'Usuario Creado', description: 'El nuevo usuario ha sido añadido al sistema.' });
+          }
+      }
 
-    onOpenChange(false);
+      if (result?.success) {
+        onOpenChange(false);
+      } else if(result) {
+        toast({ title: 'Error', description: result.message, variant: 'destructive' });
+      }
+    });
   };
 
   return (
@@ -110,17 +130,33 @@ export function CreateUserDialog({ isOpen, onOpenChange, initialData }: CreateUs
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-            <FormField control={form.control} name="name" render={({ field }) => (
+            <FormField control={form.control} name="username" render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Nombre Completo</FormLabel>
-                    <FormControl><Input placeholder="Ej: Juan Perez" {...field} /></FormControl>
+                    <FormLabel>Nombre de Usuario</FormLabel>
+                    <FormControl><Input placeholder="Ej: jperez" {...field} /></FormControl>
                     <FormMessage />
                 </FormItem>
             )} />
-            <FormField control={form.control} name="whatsappNumber" render={({ field }) => (
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="name" render={({ field }) => (
+                  <FormItem>
+                      <FormLabel>Nombre</FormLabel>
+                      <FormControl><Input placeholder="Ej: Juan" {...field} /></FormControl>
+                      <FormMessage />
+                  </FormItem>
+              )} />
+               <FormField control={form.control} name="lastName" render={({ field }) => (
+                  <FormItem>
+                      <FormLabel>Apellidos</FormLabel>
+                      <FormControl><Input placeholder="Ej: Perez" {...field} /></FormControl>
+                      <FormMessage />
+                  </FormItem>
+              )} />
+            </div>
+             <FormField control={form.control} name="email" render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Número de WhatsApp (Opcional)</FormLabel>
-                    <FormControl><Input placeholder="Ej: 51987654321" {...field} /></FormControl>
+                    <FormLabel>Correo Electrónico</FormLabel>
+                    <FormControl><Input type="email" placeholder="Ej: j.perez@correo.com" {...field} /></FormControl>
                     <FormMessage />
                 </FormItem>
             )} />
@@ -160,7 +196,10 @@ export function CreateUserDialog({ isOpen, onOpenChange, initialData }: CreateUs
             )} />
             <DialogFooter className="pt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit">{isEditMode ? 'Guardar Cambios' : 'Crear Usuario'}</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                {isEditMode ? 'Guardar Cambios' : 'Crear Usuario'}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

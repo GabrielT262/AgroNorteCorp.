@@ -3,7 +3,7 @@
 import { useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { approveOrderAction } from '../actions/order-actions';
+import { approveOrderAction } from '@/app/actions/order-actions';
 import type { RecentOrder } from '@/lib/types';
 
 export function ApproveOrderButton({ order }: { order: RecentOrder }) {
