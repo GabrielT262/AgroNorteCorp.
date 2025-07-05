@@ -1,21 +1,41 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { deleteInventoryItem } from '@/lib/db';
+import { db } from '@/lib/db';
+import * as schema from '@/lib/schema';
+import type { InventoryItem } from '@/lib/types';
+import { eq } from 'drizzle-orm';
 
-/**
- * Server Action para eliminar un producto.
- * Esta función se ejecuta de forma segura en el servidor.
- * @param id - El SKU del producto a eliminar.
- */
+
 export async function deleteProductAction(id: string) {
-  const result = await deleteInventoryItem(id);
-
-  if (result.success) {
-    // Si la eliminación fue exitosa, Next.js revalidará la ruta de inventario.
-    // Esto hace que la página se actualice con los datos más recientes la próxima vez que se visite.
+  try {
+    await db.delete(schema.inventoryItems).where(eq(schema.inventoryItems.id, id));
     revalidatePath('/dashboard/inventory');
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    return { success: false, message: 'Error al eliminar el producto.' };
   }
+}
 
-  return result;
+export async function createOrUpdateProductAction(productData: InventoryItem, isEditing: boolean) {
+    try {
+        const dataToSave = {
+            ...productData,
+            expiryDate: productData.expiryDate ? productData.expiryDate : null,
+        }
+
+        if (isEditing) {
+            await db.update(schema.inventoryItems)
+                .set(dataToSave)
+                .where(eq(schema.inventoryItems.id, productData.id));
+        } else {
+            await db.insert(schema.inventoryItems).values(dataToSave);
+        }
+        revalidatePath('/dashboard/inventory');
+        return { success: true };
+    } catch (error) {
+        console.error('Error saving product:', error);
+        return { success: false, message: 'Error al guardar el producto.' };
+    }
 }

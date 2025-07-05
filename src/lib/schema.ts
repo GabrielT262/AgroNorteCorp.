@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, integer, date, jsonb, timestamp, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, integer, date, jsonb, timestamp, foreignKey, numeric } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // ===================
@@ -21,6 +21,20 @@ export const inventoryItems = pgTable('inventory_items', {
   technicalSheetUrl: varchar('technical_sheet_url', { length: 255 }),
   remissionGuideUrl: varchar('remission_guide_url', { length: 255 }),
 });
+
+export const inventoryHistory = pgTable('inventory_history', {
+    id: varchar('id', { length: 255 }).primaryKey(),
+    date: timestamp('date').defaultNow().notNull(),
+    productId: varchar('product_id', { length: 255 }).notNull().references(() => inventoryItems.id, { onDelete: 'cascade' }),
+    productName: varchar('product_name', { length: 255 }).notNull(),
+    type: varchar('type', { length: 50 }).notNull(), // 'Entrada' | 'Salida'
+    quantity: integer('quantity').notNull(),
+    unit: varchar('unit', { length: 50 }).notNull(),
+    requestingArea: varchar('requesting_area', { length: 50 }),
+    user: varchar('user_name', { length: 255 }),
+    orderId: varchar('order_id', { length: 255 }),
+});
+
 
 // ===================
 // USUARIOS
@@ -135,9 +149,11 @@ export const fuelHistory = pgTable('fuel_history', {
     date: timestamp('date').defaultNow().notNull(),
     type: varchar('type', { length: 50 }).notNull(),
     fuelType: varchar('fuel_type', { length: 50 }).notNull(),
-    quantity: integer('quantity').notNull(),
+    quantity: numeric('quantity').notNull(),
     area: varchar('area', { length: 50 }),
     user: varchar('user_name', { length: 255 }),
     vehicleType: varchar('vehicle_type', { length: 50 }),
     registeredBy: varchar('registered_by', { length: 255 }).notNull(),
+    horometro: numeric('horometro'),
+    kilometraje: numeric('kilometraje'),
 });

@@ -5,8 +5,8 @@ import * as React from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-
-import { useFuel } from "@/context/fuel-context";
+import { useToast } from "@/hooks/use-toast";
+import { dispatchFuelAction } from "@/app/actions/fuel-actions";
 import type { FuelType, Shift, UserArea, VehicleType, FuelDispatchFormValues } from "@/lib/types";
 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "../ui/scroll-area";
+import { Loader2 } from "lucide-react";
 
 const userAreas: UserArea[] = ['Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG'];
 const vehicleTypes: VehicleType[] = ['Tractor', 'Camión', 'Camioneta', 'Moto Lineal'];
@@ -45,14 +46,23 @@ interface DispatchFuelDialogProps {
 }
 
 export function DispatchFuelDialog({ isOpen, onOpenChange }: DispatchFuelDialogProps) {
-  const { dispatchFuel } = useFuel();
+  const { toast } = useToast();
+  const [isSubmitting, startTransition] = React.useTransition();
+  
   const form = useForm<FuelDispatchFormValues>({
     resolver: zodResolver(formSchema),
   });
 
   const onSubmit = (data: FuelDispatchFormValues) => {
-    dispatchFuel(data);
-    onOpenChange(false);
+    startTransition(async () => {
+      const result = await dispatchFuelAction(data);
+      if (result.success) {
+        toast({ title: "Despacho Registrado", description: "Se ha registrado la salida de combustible." });
+        onOpenChange(false);
+      } else {
+        toast({ title: "Error", description: result.message || "No se pudo registrar el despacho.", variant: "destructive" });
+      }
+    });
   };
   
   React.useEffect(() => {
@@ -161,7 +171,10 @@ export function DispatchFuelDialog({ isOpen, onOpenChange }: DispatchFuelDialogP
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit">Registrar Despacho</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Registrar Despacho
+              </Button>
             </DialogFooter>
           </form>
         </Form>

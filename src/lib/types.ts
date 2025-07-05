@@ -137,6 +137,8 @@ export interface FuelHistoryEntry {
     user?: string;
     vehicleType?: VehicleType;
     registeredBy: string;
+    horometro?: number;
+    kilometraje?: number;
 }
 
 export interface RegisteredVehicle {

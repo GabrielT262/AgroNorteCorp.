@@ -5,9 +5,8 @@ import * as React from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useCommunication } from '@/context/communication-context';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
+import { createCommunicationAction } from '@/app/actions/communication-actions';
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -15,23 +14,28 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, X, Megaphone, Send } from 'lucide-react';
+import { Upload, X, Megaphone, Send, Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   title: z.string().min(5, 'El título debe tener al menos 5 caracteres.'),
   description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres.'),
+  aiHint: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 export default function CommunicationsPage() {
-  const { addCommunication } = useCommunication();
   const { toast } = useToast();
-  const router = useRouter();
   const [photos, setPhotos] = React.useState<File[]>([]);
+  const [isSubmitting, startSubmitTransition] = React.useTransition();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      aiHint: '',
+    }
   });
   
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,16 +54,26 @@ export default function CommunicationsPage() {
   }
 
   const onSubmit = (data: FormValues) => {
+    // In a real app, file upload would happen here, returning URLs.
+    // For the prototype, we'll pass empty arrays.
+    const photoUrls: string[] = []; 
+
     const communicationData = {
         title: data.title,
         description: data.description,
-        images: [], // Placeholder for uploaded photo URLs
+        aiHint: data.aiHint,
     };
 
-    addCommunication(communicationData);
-    form.reset();
-    setPhotos([]);
-    // Optionally redirect or show a success state
+    startSubmitTransition(async () => {
+        const result = await createCommunicationAction(communicationData, photoUrls);
+        if (result.success) {
+            toast({ title: "Comunicado Publicado", description: "El comunicado ya está visible para la organización." });
+            form.reset();
+            setPhotos([]);
+        } else {
+            toast({ title: "Error", description: result.message || "No se pudo publicar el comunicado.", variant: "destructive" });
+        }
+    });
   };
 
   return (
@@ -115,10 +129,22 @@ export default function CommunicationsPage() {
                         ))}
                     </div>
                 </div>
+                
+                 <FormField
+                    control={form.control}
+                    name="aiHint"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Pista para IA (Opcional)</FormLabel>
+                        <FormControl><Input placeholder="Ej: meeting announcement" {...field} /></FormControl>
+                         <FormMessage />
+                        </FormItem>
+                    )}
+                />
             </CardContent>
             <CardFooter className="flex justify-end border-t pt-6">
-              <Button type="submit">
-                <Send className="mr-2 h-4 w-4" />
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                 Publicar Comunicado
               </Button>
             </CardFooter>

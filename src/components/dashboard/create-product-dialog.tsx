@@ -11,6 +11,7 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import type { InventoryCategory, InventoryUnit, InventoryCultivo, InventoryItem, UserArea } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
+import { createOrUpdateProductAction } from "@/app/actions/inventory-actions";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -47,7 +48,7 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar as CalendarIcon, Upload, X, Paperclip } from "lucide-react";
+import { Calendar as CalendarIcon, Upload, X, Paperclip, Loader2 } from "lucide-react";
 
 const categories: InventoryCategory[] = ["Herramientas", "Repuestos", "Fertilizantes", "Agroquímicos", "Varios", "Implementos de Riego", "Implementos de SST"];
 const units: InventoryUnit[] = ['Unidad', 'Kg', 'Litros', 'Metros'];
@@ -81,15 +82,15 @@ type ProductFormValues = z.infer<typeof productFormSchema>;
 interface CreateProductDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (product: InventoryItem) => void;
   initialData?: InventoryItem | null;
 }
 
-export function CreateProductDialog({ isOpen, onOpenChange, onSave, initialData }: CreateProductDialogProps) {
+export function CreateProductDialog({ isOpen, onOpenChange, initialData }: CreateProductDialogProps) {
   const { toast } = useToast();
   const [photos, setPhotos] = React.useState<File[]>([]);
   const [techSheet, setTechSheet] = React.useState<File | null>(null);
   const [remissionGuide, setRemissionGuide] = React.useState<File | null>(null);
+  const [isSubmitting, startTransition] = React.useTransition();
 
   const isEditMode = !!initialData;
   
@@ -107,6 +108,9 @@ export function CreateProductDialog({ isOpen, onOpenChange, onSave, initialData 
         } else {
             form.reset({ stock: 0, name: '', sku: '', description: '', location: '', category: undefined, unit: undefined, cultivo: undefined, area: undefined, expiryDate: undefined });
         }
+        setPhotos([]);
+        setTechSheet(null);
+        setRemissionGuide(null);
     }
   }, [isOpen, isEditMode, initialData, form]);
   
@@ -141,19 +145,18 @@ export function CreateProductDialog({ isOpen, onOpenChange, onSave, initialData 
       remissionGuideUrl: initialData?.remissionGuideUrl, // Placeholder
     };
     
-    onSave(productToSave);
-
-    toast({
-      title: isEditMode ? "Producto Actualizado" : "Producto Creado",
-      description: `El producto "${data.name}" ha sido ${isEditMode ? 'actualizado' : 'añadido al inventario'}.`,
+    startTransition(async () => {
+        const result = await createOrUpdateProductAction(productToSave, isEditMode);
+        if (result.success) {
+            toast({
+                title: isEditMode ? "Producto Actualizado" : "Producto Creado",
+                description: `El producto "${data.name}" ha sido ${isEditMode ? 'actualizado' : 'añadido al inventario'}.`,
+            });
+            onOpenChange(false);
+        } else {
+            toast({ title: "Error", description: result.message || "No se pudo guardar.", variant: "destructive" });
+        }
     });
-    
-    if (!isEditMode) {
-        setPhotos([]);
-        setTechSheet(null);
-        setRemissionGuide(null);
-    }
-    onOpenChange(false);
   }
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setFile: (file: File | null) => void) => {
@@ -336,7 +339,10 @@ export function CreateProductDialog({ isOpen, onOpenChange, onSave, initialData 
             </ScrollArea>
             <DialogFooter className="p-6 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit">{isEditMode ? "Guardar Cambios" : "Crear Producto"}</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEditMode ? "Guardar Cambios" : "Crear Producto"}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

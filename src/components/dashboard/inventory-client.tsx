@@ -32,17 +32,16 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from "xlsx";
 import { InventoryHistoryDialog } from "./inventory-history-dialog";
-import { inventoryHistoryData } from "@/lib/data";
 import { deleteProductAction } from "@/app/actions/inventory-actions";
 
 
 interface InventoryClientProps {
   inventory: InventoryItem[];
+  history: InventoryHistoryEntry[];
 }
 
-export function InventoryClient({ inventory: initialInventory }: InventoryClientProps) {
+export function InventoryClient({ inventory, history }: InventoryClientProps) {
   const searchParams = useSearchParams();
-  const [inventory, setInventory] = React.useState<InventoryItem[]>(initialInventory);
   const [search, setSearch] = React.useState(searchParams.get("q") || "");
   const [category, setCategory] = React.useState("Todos");
   const [area, setArea] = React.useState("Todos");
@@ -51,13 +50,8 @@ export function InventoryClient({ inventory: initialInventory }: InventoryClient
   const [viewingItem, setViewingItem] = React.useState<InventoryItem | null>(null);
   const [deletingItem, setDeletingItem] = React.useState<InventoryItem | null>(null);
   const [isHistoryDialogOpen, setHistoryDialogOpen] = React.useState(false);
-  const [history, setHistory] = React.useState<InventoryHistoryEntry[]>(inventoryHistoryData);
   const { toast } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-  React.useEffect(() => {
-    setInventory(initialInventory);
-  }, [initialInventory]);
   
   const currentUser: User = { name: 'Gabriel T', role: 'Administrador', area: 'Administrador' };
   const canManageProductsAreas: UserArea[] = ['Logística', 'Almacén', 'Administrador'];
@@ -91,26 +85,10 @@ export function InventoryClient({ inventory: initialInventory }: InventoryClient
     setEditingItem(item);
     setCreateDialogOpen(true);
   };
-  
-  const handleSaveProduct = (product: InventoryItem) => {
-    // This function will need to be updated to call a server action to save/update a product.
-    // For now, it optimistically updates the local state.
-    setInventory(prevInventory => {
-      const existingIndex = prevInventory.findIndex(p => p.id === product.id);
-      if (existingIndex > -1) {
-        const newInventory = [...prevInventory];
-        newInventory[existingIndex] = product;
-        return newInventory;
-      } else {
-        return [product, ...prevInventory];
-      }
-    });
-  };
 
   const handleDeleteConfirm = async () => {
     if (!deletingItem) return;
 
-    // Call the server action to delete the item from the database
     const result = await deleteProductAction(deletingItem.id);
 
     if (result.success) {
@@ -121,7 +99,7 @@ export function InventoryClient({ inventory: initialInventory }: InventoryClient
     } else {
       toast({
         title: "Error al eliminar",
-        description: "No se pudo eliminar el producto de la base de datos.",
+        description: result.message || "No se pudo eliminar el producto de la base de datos.",
         variant: "destructive",
       });
     }
@@ -221,13 +199,13 @@ export function InventoryClient({ inventory: initialInventory }: InventoryClient
           return newItem;
         }).filter(item => item.id && item.name);
 
-        setInventory(importedInventory);
+        // TODO: This should call a server action to bulk-insert/update products
+        // setInventory(importedInventory);
         
         toast({
-            title: "Importación Exitosa",
-            description: `${importedInventory.length} productos han sido cargados desde el archivo.`,
+            title: "Importación Exitosa (Simulado)",
+            description: `${importedInventory.length} productos han sido cargados. En una app real, esto se guardaría en la BD.`,
             variant: "default",
-            className: "bg-accent text-accent-foreground border-accent-foreground/20"
         });
       } catch (error) {
         console.error("Error al importar el archivo:", error);
@@ -343,18 +321,9 @@ export function InventoryClient({ inventory: initialInventory }: InventoryClient
         </ScrollArea>
       </div>
       <CreateProductDialog
-        isOpen={isCreateDialogOpen || !!editingItem}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeProductDialog();
-          } else {
-             if (editingItem) {
-               setCreateDialogOpen(true)
-             }
-          }
-        }}
+        isOpen={isCreateDialogOpen}
+        onOpenChange={closeProductDialog}
         initialData={editingItem}
-        onSave={handleSaveProduct}
       />
       <ProductDetailDialog 
         item={viewingItem}

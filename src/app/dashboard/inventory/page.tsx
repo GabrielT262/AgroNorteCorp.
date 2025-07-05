@@ -1,9 +1,9 @@
-import type { InventoryItem } from '@/lib/types';
+import type { InventoryItem, InventoryHistoryEntry } from '@/lib/types';
 import { InventoryClient } from '@/components/dashboard/inventory-client';
 import { Suspense } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card } from '@/components/ui/card';
-import { getInventoryItems } from '@/lib/db';
+import { getInventoryItems, getInventoryHistory } from '@/lib/db';
 
 const InventoryPageSkeleton = () => (
     <div className="flex flex-col h-full">
@@ -40,13 +40,15 @@ const InventoryPageSkeleton = () => (
 
 
 export default async function InventoryPage() {
-  // Se obtienen los datos de la base de datos de Supabase.
-  const inventory: InventoryItem[] = await getInventoryItems();
+  const [inventory, history] = await Promise.all([
+    getInventoryItems(),
+    getInventoryHistory(),
+  ]);
 
   return (
     <div className="h-full">
       <Suspense fallback={<InventoryPageSkeleton />}>
-        <InventoryClient inventory={inventory} />
+        <InventoryClient inventory={inventory} history={history} />
       </Suspense>
     </div>
   );

@@ -5,8 +5,8 @@ import * as React from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-
-import { useFuel } from "@/context/fuel-context";
+import { useToast } from "@/hooks/use-toast";
+import { addFuelStockAction } from "@/app/actions/fuel-actions";
 import type { FuelType } from "@/lib/types";
 
 import {
@@ -34,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
 
 
 const formSchema = z.object({
@@ -49,7 +50,9 @@ interface AddFuelStockDialogProps {
 }
 
 export function AddFuelStockDialog({ isOpen, onOpenChange }: AddFuelStockDialogProps) {
-  const { addStock } = useFuel();
+  const { toast } = useToast();
+  const [isSubmitting, startTransition] = React.useTransition();
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -58,8 +61,15 @@ export function AddFuelStockDialog({ isOpen, onOpenChange }: AddFuelStockDialogP
   });
 
   const onSubmit = (data: FormValues) => {
-    addStock(data.fuelType, data.quantity);
-    onOpenChange(false);
+    startTransition(async () => {
+        const result = await addFuelStockAction(data);
+        if(result.success) {
+            toast({ title: "Stock Añadido", description: "El nivel de combustible ha sido actualizado." });
+            onOpenChange(false);
+        } else {
+            toast({ title: "Error", description: result.message || "No se pudo añadir el stock.", variant: "destructive"});
+        }
+    });
   };
   
   React.useEffect(() => {
@@ -117,7 +127,10 @@ export function AddFuelStockDialog({ isOpen, onOpenChange }: AddFuelStockDialogP
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit">Añadir Stock</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                Añadir Stock
+              </Button>
             </DialogFooter>
           </form>
         </Form>
