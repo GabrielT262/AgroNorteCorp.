@@ -53,7 +53,7 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
   const { toast } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   
-  const currentUser: User = { name: 'Gabriel T', role: 'Administrador', area: 'Administrador' };
+  const currentUser: User = { name: 'Admin', role: 'Administrador', area: 'Administrador' };
   const canManageProductsAreas: UserArea[] = ['Logística', 'Almacén', 'Administrador'];
   const canManageProducts = canManageProductsAreas.includes(currentUser.area);
   const canViewHistoryAreas: UserArea[] = ['Gerencia', 'Logística', 'Almacén', 'Administrador'];

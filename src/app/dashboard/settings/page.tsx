@@ -97,7 +97,7 @@ export default function SettingsPage() {
                     <Label>Foto de Perfil</Label>
                     <div className="flex items-center gap-4">
                       <Avatar className="h-20 w-20">
-                        <AvatarImage src={avatarPreview || ''} alt="Gabriel T" data-ai-hint="person portrait" />
+                        <AvatarImage src={avatarPreview || ''} alt="Admin" data-ai-hint="person portrait" />
                         <AvatarFallback>GT</AvatarFallback>
                       </Avatar>
                       <Button asChild variant="outline">

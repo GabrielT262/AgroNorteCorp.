@@ -216,7 +216,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             <DropdownMenuTrigger asChild>
               <Button variant="secondary" size="icon" className="rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="https://placehold.co/100x100.png" alt="Gabriel T" data-ai-hint="person portrait"/>
+                  <AvatarImage src="https://placehold.co/100x100.png" alt="Admin" data-ai-hint="person portrait"/>
                   <AvatarFallback>GT</AvatarFallback>
                 </Avatar>
                 <span className="sr-only">Toggle user menu</span>

@@ -32,9 +32,9 @@ import { createOrderAction } from "@/app/actions/order-actions";
 
 // Hardcoded current user for demo purposes. In a real app, this would come from an auth context.
 const currentUser = { 
-  name: 'Juan V', 
-  area: 'Producción' as UserArea,
-  signatureUrl: 'https://placehold.co/200x80.png?text=Firma+JV'
+  name: 'Gabriel T', 
+  area: 'Administrador' as UserArea,
+  signatureUrl: 'https://placehold.co/200x80.png?text=Firma+GT'
 };
 
 export function OrderSheet() {

@@ -8,9 +8,8 @@ import { SecurityReportsClient } from './security-reports-client';
 
 
 // Hardcoded current user for demonstration
-const currentUser: User = { name: 'Carlos P', role: 'Usuario', area: 'Seguridad Patrimonial' };
+const currentUser: User = { name: 'Gabriel T', role: 'Administrador', area: 'Seguridad Patrimonial' };
 // To test other roles, change the currentUser object above to:
-// const currentUser: User = { name: 'Gabriel T', role: 'Administrador', area: 'Administrador' };
 // const currentUser: User = { name: 'Ana G', role: 'Usuario', area: 'Gerencia' };
 
 

