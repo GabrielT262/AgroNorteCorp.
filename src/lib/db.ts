@@ -5,13 +5,23 @@ import { eq, and, sql, desc, gte, lte, or } from 'drizzle-orm';
 import * as schema from './schema';
 import type { InventoryItem, RecentOrder, ManagedUser, SecurityReport, GalleryPost, Communication, FuelHistoryEntry, UserArea, RegisteredVehicle, InventoryHistoryEntry } from './types';
 
-if (!process.env.DATABASE_URL) {
+let connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
   // throw new Error('DATABASE_URL environment variable is not set. Please add it to your .env file.');
   console.warn('DATABASE_URL environment variable is not set. Please add it to your .env file. Application will run with limited functionality.');
 }
 
+// When connecting to a Supabase database with connection pooling (PgBouncer),
+// sslmode=require is necessary. This error often occurs in serverless environments like Vercel.
+if (connectionString && !/sslmode=/.test(connectionString)) {
+    const separator = connectionString.includes('?') ? '&' : '?';
+    connectionString = `${connectionString}${separator}sslmode=require`;
+}
+
+
 // For query purposes
-const queryClient = postgres(process.env.DATABASE_URL || '');
+const queryClient = postgres(connectionString || '');
 export const db = drizzle(queryClient, { schema });
 
 // INVENTORY
