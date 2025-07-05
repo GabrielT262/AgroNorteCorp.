@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "db:push": "drizzle-kit push:pg"
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.13.0",
