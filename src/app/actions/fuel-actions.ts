@@ -1,3 +1,4 @@
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -10,7 +11,7 @@ export async function addFuelStockAction(data: { fuelType: FuelType, quantity: n
     const newEntryId = `FUEL-IN-${uuidv4().slice(0, 8).toUpperCase()}`;
     const hardcodedUserId = 'usr_gabriel'; // Placeholder for actual user from session
     try {
-        const newEntry: Omit<FuelHistoryEntry, 'id'> = {
+        const newEntry: Omit<FuelHistoryEntry, 'id' | 'users'> = {
             type: 'Abastecimiento',
             fuel_type: data.fuelType,
             quantity: data.quantity,
@@ -62,6 +63,7 @@ export async function dispatchFuelAction(data: FuelDispatchFormValues) {
             area: data.area,
             user_name: data.user_name,
             vehicle_type: data.vehicle_type,
+            vehicle_model: data.vehicle_model,
             horometro: data.horometro,
             kilometraje: data.kilometraje,
             registered_by_id: hardcodedUserId, 

@@ -56,10 +56,10 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   
   const currentUser: User = { name: 'Admin', role: 'Administrador', area: 'Administrador' };
-  const canManageProductsAreas: UserArea[] = ['Logística', 'Almacén', 'Administrador'];
-  const canManageProducts = canManageProductsAreas.includes(currentUser.area);
+  const canManageProductsAreas: UserArea[] = ['Logística', 'Almacén', 'Administrador', 'Gerencia'];
+  const canManageProducts = canManageProductsAreas.includes(currentUser.area) || currentUser.role === 'Administrador';
   const canViewHistoryAreas: UserArea[] = ['Gerencia', 'Logística', 'Almacén', 'Administrador'];
-  const canViewHistory = canViewHistoryAreas.includes(currentUser.area);
+  const canViewHistory = canViewHistoryAreas.includes(currentUser.area) || currentUser.role === 'Administrador';
 
   React.useEffect(() => {
     setSearch(searchParams.get('q') || '');
@@ -126,7 +126,7 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
             'Lote ID': batch.id,
             'Stock Lote': batch.stock,
             'Unidad': item.unit,
-            'Fecha de Vencimiento Lote': batch.expiryDate || '',
+            'Fecha de Vencimiento Lote': batch.expiry_date || '',
         }))
     );
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -158,28 +158,30 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
                 </div>
                  <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto">
                     {canViewHistory && (
+                      <>
                         <Button variant="outline" onClick={() => setHistoryDialogOpen(true)}>
                             <History className="mr-2 h-4 w-4" />
                             Historial
                         </Button>
+                        <Button variant="outline" onClick={handleExport}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Exportar
+                        </Button>
+                      </>
                     )}
-                    <Button variant="outline" onClick={handleImportClick}>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Importar
-                    </Button>
-                     <input 
-                      type="file" 
-                      ref={fileInputRef} 
-                      onChange={handleFileImport}
-                      className="hidden" 
-                      accept=".xlsx, .xls, .csv"
-                    />
-                    <Button variant="outline" onClick={handleExport}>
-                        <Download className="mr-2 h-4 w-4" />
-                        Exportar
-                    </Button>
                      {canManageProducts && (
                       <>
+                        <Button variant="outline" onClick={handleImportClick}>
+                          <Upload className="mr-2 h-4 w-4" />
+                          Importar
+                        </Button>
+                        <input 
+                          type="file" 
+                          ref={fileInputRef} 
+                          onChange={handleFileImport}
+                          className="hidden" 
+                          accept=".xlsx, .xls, .csv"
+                        />
                         <Button variant="outline" onClick={() => setAddStockDialogOpen(true)}>
                             <PlusCircle className="mr-2 h-4 w-4" />
                             Añadir Stock

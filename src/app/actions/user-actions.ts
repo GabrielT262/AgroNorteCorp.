@@ -3,7 +3,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { supabase } from '@/lib/supabase';
-import type { ManagedUser } from '@/lib/types';
+import type { ManagedUser, UserArea } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { createNotificationAction } from './notification-actions';
 
@@ -187,5 +187,36 @@ export async function approveUserAction(userId: string) {
     } catch (error) {
         console.error('Error approving user:', error);
         return { success: false, message: 'Error al aprobar el usuario.' };
+    }
+}
+
+export async function requestPasswordResetAction(data: { credential: string; area: UserArea; details: string; }) {
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('name, username')
+            .or(`email.eq.${data.credential},username.eq.${data.credential}`)
+            .single();
+
+        if (error || !user) {
+            // Don't reveal if user exists for security reasons.
+            // Just say the request was sent, to prevent user enumeration attacks.
+            console.warn(`Password reset requested for a non-existent or duplicate user: ${data.credential}`);
+            return { success: true }; // Always return success to the client
+        }
+
+        await createNotificationAction({
+            recipient_id: 'Administrador',
+            title: 'Solicitud de Reseteo de Contraseña',
+            description: `El usuario ${user.name} (${user.username}) del área ${data.area} solicita un reseteo. Motivo: "${data.details}"`,
+            path: '/dashboard/manage-users'
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        console.error('Error creating password reset request:', error);
+        // Even in case of a server error, we might not want to inform the user.
+        // For this internal tool, returning an error message is acceptable.
+        return { success: false, message: 'Ocurrió un error al enviar la solicitud.' };
     }
 }

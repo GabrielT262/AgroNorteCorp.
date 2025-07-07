@@ -67,7 +67,6 @@ export interface RecentOrder {
   status: 'Aprobado' | 'Pendiente' | 'Rechazado' | 'Despachado';
   requesting_area: UserArea;
   requesting_user_id: string;
-  requesting_user_name?: string; // Added for display
   users?: { // From join
     name: string;
     last_name: string;
@@ -132,6 +131,7 @@ export interface FuelDispatchFormValues {
     fuel_type: FuelType;
     shift: Shift;
     vehicle_type: VehicleType;
+    vehicle_model?: string;
     horometro?: number;
     kilometraje?: number;
     quantity: number;
@@ -146,6 +146,7 @@ export interface FuelHistoryEntry {
     area?: UserArea;
     user_name?: string;
     vehicle_type?: VehicleType;
+    vehicle_model?: string;
     registered_by_id: string;
     horometro?: number;
     kilometraje?: number;

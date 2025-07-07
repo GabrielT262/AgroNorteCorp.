@@ -27,21 +27,15 @@ import {
   TriangleAlert,
   Wrench,
 } from 'lucide-react';
-import type { User, ExpiringProduct, RecentOrder } from '@/lib/types';
+import type { User, ExpiringProduct, RecentOrder, ManagedUser } from '@/lib/types';
 import Link from 'next/link';
 import { getDashboardData } from '@/lib/db';
 import { ApproveOrderButton } from './approve-order-button';
+import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-const AdminDashboard = async () => {
-  // In a real app, this would come from an authentication context/provider
-  const currentUser: User = {
-    name: 'Gabriel T',
-    role: 'Administrador',
-    area: 'Administrador',
-  };
-
+const AdminDashboard = async ({currentUser}: {currentUser: ManagedUser}) => {
   const {
     recentOrders,
     expiringProducts,
@@ -209,19 +203,19 @@ const AdminDashboard = async () => {
                 </TableHeader>
                 <TableBody>
                   {expiringProducts.map((product) => (
-                    <TableRow key={`${product.name}-${product.loteId}`}>
+                    <TableRow key={`${product.name}-${product.lote_id}`}>
                       <TableCell className="font-medium">
-                        {product.name} <span className="text-muted-foreground text-xs">({product.loteId})</span>
+                        {product.name} <span className="text-muted-foreground text-xs">({product.lote_id})</span>
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant={
-                            product.expiresIn === 'Vencido'
+                            product.expires_in === 'Vencido'
                               ? 'destructive'
                               : 'secondary'
                           }
                         >
-                          {product.expiresIn}
+                          {product.expires_in}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -272,26 +266,32 @@ const OperarioDashboard = () => {
 };
 
 export default async function DashboardPage() {
-  // Hardcoded current user for demonstration
-  const currentUser: User = {
-    name: 'Gabriel T',
-    role: 'Administrador',
-    area: 'Administrador',
-  };
+  const { data: currentUser, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', 'usr_gabriel')
+    .single();
+
+  if (error || !currentUser) {
+    return <div>Usuario no encontrado.</div>
+  }
+
+  const adminAreas: User['area'][] = ['Administrador', 'Gerencia'];
+  const isAdmin = adminAreas.includes(currentUser.area) || currentUser.role === 'Administrador';
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Bienvenido, {currentUser.name}</h1>
         <p className="text-muted-foreground">
-          {currentUser.role === 'Administrador'
+          {isAdmin
             ? 'Este es un resumen general de la operación.'
             : 'Selecciona una opción para empezar.'}
         </p>
       </div>
 
-      {currentUser.role === 'Administrador' ? (
-        <AdminDashboard />
+      {isAdmin ? (
+        <AdminDashboard currentUser={currentUser}/>
       ) : (
         <OperarioDashboard />
       )}

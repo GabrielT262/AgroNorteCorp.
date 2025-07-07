@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -24,6 +25,7 @@ import { DispatchFuelDialog } from '@/components/dashboard/dispatch-fuel-dialog'
 import { Plus, Download, Calendar as CalendarIcon, X, Fuel } from 'lucide-react';
 
 const canViewHistoryAreas: UserArea[] = ['Gerencia', 'Logística', 'Almacén', 'Administrador'];
+const canManageFuelAreas: UserArea[] = ['Gerencia', 'Logística', 'Almacén', 'Administrador'];
 
 interface FuelClientProps {
     initialHistory: FuelHistoryEntry[];
@@ -43,7 +45,8 @@ export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelC
   const [fuelTypeFilter, setFuelTypeFilter] = React.useState<"all" | FuelType>("all");
   const [vehicleTypeFilter, setVehicleTypeFilter] = React.useState<"all" | VehicleType>("all");
 
-  const canViewHistory = canViewHistoryAreas.includes(currentUser.area);
+  const canViewHistory = canViewHistoryAreas.includes(currentUser.area) || currentUser.role === 'Administrador';
+  const canManageFuel = canManageFuelAreas.includes(currentUser.area) || currentUser.role === 'Administrador';
   const vehicleTypes: VehicleType[] = ['Tractor', 'Camión', 'Camioneta', 'Moto Lineal'];
 
   const filteredHistory = React.useMemo(() => {
@@ -62,17 +65,21 @@ export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelC
   }, [initialHistory, dateRange, fuelTypeFilter, vehicleTypeFilter]);
 
   const handleExport = () => {
-    const dataToExport = filteredHistory.map(entry => ({
-      'ID': entry.id,
-      'Fecha': format(parseISO(entry.date), 'dd/MM/yyyy HH:mm'),
-      'Tipo Movimiento': entry.type,
-      'Tipo Combustible': entry.fuel_type,
-      'Cantidad (gal)': entry.quantity,
-      'Área Solicitante': entry.area || '-',
-      'Usuario': entry.user || '-',
-      'Tipo Vehículo': entry.vehicle_type || '-',
-      'Registrado Por': entry.registered_by,
-    }));
+    const dataToExport = filteredHistory.map(entry => {
+      const registeredBy = entry.users ? `${entry.users.name} ${entry.users.last_name}` : entry.registered_by_id;
+      return {
+        'ID': entry.id,
+        'Fecha': format(parseISO(entry.date), 'dd/MM/yyyy HH:mm'),
+        'Tipo Movimiento': entry.type,
+        'Tipo Combustible': entry.fuel_type,
+        'Cantidad (gal)': entry.quantity,
+        'Área Solicitante': entry.area || '-',
+        'Usuario Solicitante': entry.user_name || '-',
+        'Tipo Vehículo': entry.vehicle_type || '-',
+        'Modelo Vehículo': entry.vehicle_model || '-',
+        'Registrado Por': registeredBy,
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
@@ -105,16 +112,18 @@ export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelC
     <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <h1 className="text-3xl font-bold tracking-tight font-headline">Gestión de Combustible</h1>
-        <div className="flex gap-2">
-          <Button onClick={() => setDispatchOpen(true)}>
-            <Fuel className="h-4 w-4 mr-2" />
-            Despachar
-          </Button>
-          <Button variant="outline" onClick={() => setAddStockOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Añadir Stock
-          </Button>
-        </div>
+        {canManageFuel && (
+          <div className="flex gap-2">
+            <Button onClick={() => setDispatchOpen(true)}>
+              <Fuel className="h-4 w-4 mr-2" />
+              Despachar
+            </Button>
+            <Button variant="outline" onClick={() => setAddStockOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Añadir Stock
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center justify-items-center">
@@ -215,7 +224,7 @@ export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelC
                     <TableHead>Tipo</TableHead>
                     <TableHead>Combustible</TableHead>
                     <TableHead className="text-right">Cantidad</TableHead>
-                    <TableHead>Área/Vehículo</TableHead>
+                    <TableHead>Detalle</TableHead>
                     <TableHead>Usuario</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -229,8 +238,8 @@ export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelC
                             </TableCell>
                             <TableCell>{entry.fuel_type}</TableCell>
                             <TableCell className="text-right">{entry.quantity.toFixed(2)} gal</TableCell>
-                            <TableCell>{entry.area || entry.vehicle_type}</TableCell>
-                            <TableCell>{entry.user}</TableCell>
+                            <TableCell>{entry.area || `${entry.vehicle_type || ''} ${entry.vehicle_model || ''}`.trim()}</TableCell>
+                            <TableCell>{entry.user_name}</TableCell>
                             </TableRow>
                         ))
                     ) : (

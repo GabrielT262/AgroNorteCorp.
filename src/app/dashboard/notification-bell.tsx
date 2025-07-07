@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -54,7 +53,8 @@ export function NotificationBell({ currentUser }: { currentUser: Omit<ManagedUse
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `recipient_id=eq.${currentUser.area}${currentUser.role === 'Administrador' ? ',recipient_id=eq.Administrador' : ''}`
+          // The IN filter listens for new rows where recipient_id is either the user's area or the global 'Administrador' recipient
+          filter: `recipient_id=in.(${currentUser.area},Administrador)`
         },
         (payload) => {
           toast({
@@ -84,7 +84,7 @@ export function NotificationBell({ currentUser }: { currentUser: Omit<ManagedUse
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser.area, currentUser.role, fetchNotifications, toast]);
+  }, [currentUser.area, fetchNotifications, toast]);
 
 
   const unreadCount = notifications.filter(n => !n.is_read).length;

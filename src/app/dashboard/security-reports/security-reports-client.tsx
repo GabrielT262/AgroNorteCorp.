@@ -109,7 +109,7 @@ export function SecurityReportsClient({
             ) : (
                 <div className="col-span-full text-center py-16 bg-muted/50 rounded-lg">
                     <p className="text-lg font-semibold">No hay reportes de seguridad para hoy.</p>
-                    <p className="text-muted-foreground">Crea un nuevo reporte para registrar una novedad.</p>
+                    {canManageReports && <p className="text-muted-foreground">Crea un nuevo reporte para registrar una novedad.</p>}
                 </div>
             )}
         </div>

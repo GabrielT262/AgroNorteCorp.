@@ -81,15 +81,17 @@ export function DashboardLayoutContent({ currentUser, children }: { currentUser:
       router.push('/dashboard/inventory');
     }
   };
+  
+  const allRolesAndAreas = ['Administrador', 'Usuario', 'Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG'];
 
   const allNavLinks = [
-    { href: "/dashboard", label: "Inicio", icon: Home, active: pathname === "/dashboard", roles: ['Administrador', 'Usuario', 'Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG'] },
-    { href: "/dashboard/inventory", label: "Inventario", icon: Package, active: pathname.startsWith("/dashboard/inventory"), roles: ['Administrador', 'Usuario', 'Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG'] },
-    { href: "/dashboard/requests", label: "Solicitudes", icon: ShoppingCart, active: pathname.startsWith("/dashboard/requests"), roles: ['Administrador', 'Usuario', 'Gerencia', 'Almacén', 'Logística', 'Producción', 'Sanidad', 'SS.GG', 'Taller'] },
-    { href: "/dashboard/fuel", label: "Combustible", icon: Fuel, active: pathname.startsWith("/dashboard/fuel"), disabled: false, roles: ['Administrador', 'Usuario', 'Almacén', 'Logística', 'Taller'] },
-    { href: "/dashboard/security-reports", label: "Reportes de Seguridad", icon: ShieldCheck, active: pathname.startsWith("/dashboard/security-reports"), disabled: false, roles: ['Administrador', 'Usuario', 'Gerencia', 'Seguridad Patrimonial'] },
-    { href: "/dashboard/gallery", label: "Galería De Logros", icon: GalleryHorizontal, active: pathname.startsWith("/dashboard/gallery"), disabled: false, roles: ['Administrador', 'Usuario', 'Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG'] },
-    { href: "/dashboard/communications", label: "Comunicados", icon: Megaphone, active: pathname.startsWith("/dashboard/communications"), roles: ['Administrador', 'Gerencia'] },
+    { href: "/dashboard", label: "Inicio", icon: Home, active: pathname === "/dashboard", roles: allRolesAndAreas },
+    { href: "/dashboard/inventory", label: "Inventario", icon: Package, active: pathname.startsWith("/dashboard/inventory"), roles: allRolesAndAreas },
+    { href: "/dashboard/requests", label: "Solicitudes", icon: ShoppingCart, active: pathname.startsWith("/dashboard/requests"), roles: allRolesAndAreas },
+    { href: "/dashboard/fuel", label: "Combustible", icon: Fuel, active: pathname.startsWith("/dashboard/fuel"), roles: ['Administrador', 'Gerencia', 'Logística', 'Almacén'] },
+    { href: "/dashboard/security-reports", label: "Reportes de Seguridad", icon: ShieldCheck, active: pathname.startsWith("/dashboard/security-reports"), roles: ['Administrador', 'Gerencia', 'Seguridad Patrimonial'] },
+    { href: "/dashboard/gallery", label: "Galería De Logros", icon: GalleryHorizontal, active: pathname.startsWith("/dashboard/gallery"), roles: allRolesAndAreas },
+    { href: "/dashboard/communications", label: "Comunicados", icon: Megaphone, active: pathname.startsWith("/dashboard/communications"), roles: allRolesAndAreas },
     { href: "/dashboard/manage-users", label: "Gestionar Usuarios", icon: Users, active: pathname.startsWith("/dashboard/manage-users"), roles: ['Administrador'] },
     { href: "/dashboard/company-settings", label: "Personalización", icon: Paintbrush, active: pathname.startsWith("/dashboard/company-settings"), roles: ['Administrador'] },
   ];
@@ -116,13 +118,11 @@ export function DashboardLayoutContent({ currentUser, children }: { currentUser:
               {navLinks.map((link) => (
                 <Link
                   key={link.label}
-                  href={link.disabled ? "#" : link.href}
+                  href={link.href}
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary",
                     link.active && "bg-muted text-primary",
-                    link.disabled && "cursor-not-allowed opacity-50"
                   )}
-                  onClick={(e) => link.disabled && e.preventDefault()}
                 >
                   <link.icon className="h-4 w-4" />
                   {link.label}
@@ -164,15 +164,10 @@ export function DashboardLayoutContent({ currentUser, children }: { currentUser:
                 {navLinks.map((link) => (
                   <Link
                     key={link.label}
-                    href={link.disabled ? "#" : link.href}
-                    onClick={(e) => {
-                      if (link.disabled) e.preventDefault();
-                      // Ideally close sheet on navigate
-                    }}
+                    href={link.href}
                     className={cn(
                       "mx-[-0.65rem] flex items-center gap-4 rounded-xl px-3 py-2 text-muted-foreground hover:text-foreground",
                       link.active && "bg-muted text-foreground",
-                      link.disabled && "cursor-not-allowed opacity-50"
                     )}
                   >
                     <link.icon className="h-5 w-5" />

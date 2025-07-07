@@ -25,9 +25,10 @@ const shifts: Shift[] = ['Día', 'Noche'];
 const formSchema = z.object({
   fuel_type: z.enum(['Gasolina', 'Petróleo'], { required_error: 'Requerido' }),
   area: z.enum(userAreas, { required_error: 'Requerido' }),
-  user: z.string().min(3, 'Debe tener al menos 3 caracteres'),
+  user_name: z.string().min(3, 'Debe tener al menos 3 caracteres'),
   shift: z.enum(shifts, { required_error: 'Requerido' }),
   vehicle_type: z.enum(vehicleTypes, { required_error: 'Requerido' }),
+  vehicle_model: z.string().optional(),
   quantity: z.coerce.number().min(0.1, 'Debe ser mayor a 0'),
   horometro: z.coerce.number().optional(),
   kilometraje: z.coerce.number().optional(),
@@ -115,7 +116,7 @@ export function DispatchFuelDialog({ isOpen, onOpenChange, onFinished }: Dispatc
                             </Select><FormMessage />
                             </FormItem>
                         )} />
-                        <FormField control={form.control} name="user" render={({ field }) => (
+                        <FormField control={form.control} name="user_name" render={({ field }) => (
                             <FormItem>
                             <FormLabel>Usuario Solicitante</FormLabel>
                             <FormControl><Input placeholder="Nombre del usuario" {...field} /></FormControl><FormMessage />
@@ -151,6 +152,16 @@ export function DispatchFuelDialog({ isOpen, onOpenChange, onFinished }: Dispatc
                             </FormItem>
                          )} />
                     </div>
+
+                    {(watchedVehicleType === 'Tractor' || watchedVehicleType === 'Camioneta') && (
+                        <FormField control={form.control} name="vehicle_model" render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Modelo del Vehículo</FormLabel>
+                            <FormControl><Input placeholder="Ej: John Deere 6110D" {...field} /></FormControl><FormMessage />
+                            </FormItem>
+                        )} />
+                    )}
+
                     {watchedVehicleType === 'Tractor' && (
                         <FormField control={form.control} name="horometro" render={({ field }) => (
                             <FormItem>

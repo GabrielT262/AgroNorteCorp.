@@ -4,10 +4,18 @@ import { Toaster } from "@/components/ui/toaster"
 import { CompanySettingsProvider } from '@/context/company-settings-context';
 import { getCompanySettings } from '@/lib/db';
 
-export const metadata: Metadata = {
-  title: 'Agro Norte Corp',
-  description: 'Sistema de gestión de inventario y pedidos.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const companySettings = await getCompanySettings();
+  
+  return {
+    title: 'Agro Norte Corp',
+    description: 'Sistema de gestión de inventario y pedidos.',
+    icons: {
+      icon: companySettings.logo_url || 'https://placehold.co/32x32.png',
+      apple: companySettings.logo_url || 'https://placehold.co/180x180.png',
+    },
+  };
+}
 
 export default async function RootLayout({
   children,
