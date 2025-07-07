@@ -11,14 +11,14 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Phone, Leaf, Loader2, Image as ImageIcon } from 'lucide-react';
 import { updateCompanySettingsAction } from '@/app/actions/settings-actions';
+import { compressImage } from '@/lib/image-compressor';
 
-const MAX_IMAGE_SIZE_BYTES = 1 * 1024 * 1024; // 1MB
 
 export default function CompanySettingsClient() {
   const { settings, isSettingsLoading } = useCompanySettings();
   const [isSaving, startSavingTransition] = React.useTransition();
-  const [logoError, setLogoError] = React.useState<string | null>(null);
-  const [bgError, setBgError] = React.useState<string | null>(null);
+  const [logoFile, setLogoFile] = React.useState<File | null>(null);
+  const [bgFile, setBgFile] = React.useState<File | null>(null);
   const [logoPreview, setLogoPreview] = React.useState<string | null>(null);
   const [bgPreview, setBgPreview] = React.useState<string | null>(null);
   const { toast } = useToast();
@@ -28,20 +28,19 @@ export default function CompanySettingsClient() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'bg') => {
     const file = e.target.files?.[0] || null;
-    const errorSetter = type === 'logo' ? setLogoError : setBgError;
     const previewSetter = type === 'logo' ? setLogoPreview : setBgPreview;
-    
-    errorSetter(null);
+
     if (!file) {
+      if (type === 'logo') setLogoFile(null);
+      else setBgFile(null);
       previewSetter(null);
       return;
     }
 
-    if (file.size > MAX_IMAGE_SIZE_BYTES) {
-      errorSetter(`La imagen no debe superar 1 MB.`);
-      previewSetter(null);
-      if(e.target) e.target.value = ''; // Clear file input
-      return;
+    if (type === 'logo') {
+      setLogoFile(file);
+    } else {
+      setBgFile(file);
     }
     
     const reader = new FileReader();
@@ -53,13 +52,42 @@ export default function CompanySettingsClient() {
 
   const handleSaveChanges = () => {
     if (formRef.current) {
-      const formData = new FormData(formRef.current);
+      const originalFormData = new FormData(formRef.current);
+
       startSavingTransition(async () => {
+        const formData = new FormData();
+        formData.append('support_whats_app', originalFormData.get('support_whats_app') as string);
+        
+        if (logoFile) {
+            toast({ title: "Procesando logo...", description: "La imagen se está comprimiendo para optimizarla." });
+            const compressed = await compressImage(logoFile);
+            formData.append('logo', compressed, compressed.name);
+        }
+
+        if (bgFile) {
+            toast({ title: "Procesando fondo...", description: "La imagen se está comprimiendo para optimizarla." });
+            const compressed = await compressImage(bgFile);
+            formData.append('login_bg', compressed, compressed.name);
+        }
+
+        if (!logoFile && !bgFile) {
+          // If only text is changed, we still need to call the action
+           const result = await updateCompanySettingsAction(formData);
+           if (result.success) {
+               toast({ title: 'Configuración Guardada', description: 'Los cambios se han guardado correctamente.' });
+           } else {
+                toast({ title: 'Error', description: result.message || 'No se pudo guardar la configuración.', variant: 'destructive' });
+           }
+           return;
+        }
+
         const result = await updateCompanySettingsAction(formData);
         if (result.success) {
           toast({ title: 'Configuración Guardada', description: 'Los cambios se han guardado correctamente.' });
           setLogoPreview(null);
           setBgPreview(null);
+          setLogoFile(null);
+          setBgFile(null);
           if (logoInputRef.current) logoInputRef.current.value = '';
           if (bgInputRef.current) bgInputRef.current.value = '';
         } else {
@@ -91,8 +119,7 @@ export default function CompanySettingsClient() {
                     <ImageIcon className="mr-2"/> Cambiar Logo
                   </Button>
                   <Input ref={logoInputRef} name="logo" type="file" accept="image/*" className="hidden" onChange={e => handleFileChange(e, 'logo')} />
-                  <p className="text-xs text-muted-foreground">Sube un archivo de imagen (JPG, PNG). Máx 1MB.</p>
-                  {logoError && <p className="text-sm font-medium text-destructive mt-2">{logoError}</p>}
+                  <p className="text-xs text-muted-foreground">Sube un archivo de imagen (JPG, PNG). Se comprimirá si supera 1MB.</p>
                 </div>
               </div>
             </div>
@@ -107,8 +134,7 @@ export default function CompanySettingsClient() {
                     <ImageIcon className="mr-2"/> Cambiar Fondo
                   </Button>
                   <Input ref={bgInputRef} name="login_bg" type="file" accept="image/*" className="hidden" onChange={e => handleFileChange(e, 'bg')} />
-                  <p className="text-xs text-muted-foreground">Sube un archivo de imagen (JPG, PNG). Máx 1MB.</p>
-                  {bgError && <p className="text-sm font-medium text-destructive mt-2">{bgError}</p>}
+                  <p className="text-xs text-muted-foreground">Sube un archivo de imagen (JPG, PNG). Se comprimirá si supera 1MB.</p>
                 </div>
               </div>
             </div>

@@ -161,13 +161,24 @@ export function InventoryClient({ inventory, history, currentUser }: InventoryCl
           if (result.success) {
             toast({
               title: "Importación Exitosa",
-              description: `Se procesaron ${result.processed} productos. ${result.created} creados, ${result.updated} actualizados.`,
+              description: `${result.message} ${result.created} creados, ${result.updated} actualizados.`,
             });
           } else {
+            const errorDescription = (result.details || [])
+                .map(e => `Fila ${e.row}: ${e.message}`)
+                .slice(0, 5) // Show only the first 5 errors in the toast
+                .join(' \n');
+            const moreErrorsMessage = (result.details?.length || 0) > 5 ? `\n...y ${result.details.length - 5} más.` : '';
+
             toast({
-              title: `Importación completada con ${result.errors} errores`,
-              description: result.message,
+              title: `Importación falló con ${result.errors} errores`,
+              description: (
+                <pre className="mt-2 w-[340px] rounded-md bg-slate-950 p-4">
+                  <code className="text-white whitespace-pre-wrap">{`${errorDescription}${moreErrorsMessage}`}</code>
+                </pre>
+              ),
               variant: "destructive",
+              duration: 20000,
             });
           }
         } catch (error) {

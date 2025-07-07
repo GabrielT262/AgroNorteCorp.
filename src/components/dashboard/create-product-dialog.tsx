@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import type { InventoryCategory, InventoryUnit, InventoryCultivo, UserArea, InventoryItem, Batch } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { createProductAction } from "@/app/actions/inventory-actions";
+import { compressImage } from "@/lib/image-compressor";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -53,9 +54,7 @@ const units: InventoryUnit[] = ['Unidad', 'Kg', 'Litros', 'Metros'];
 const cultivos: InventoryCultivo[] = ['Uva', 'Palto'];
 const userAreas: UserArea[] = ['Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG', 'Administrador'];
 
-const MAX_IMAGE_SIZE_MB = 1;
 const MAX_PDF_SIZE_MB = 5;
-const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 const MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024;
 
 const productFormSchema = z.object({
@@ -67,10 +66,7 @@ const productFormSchema = z.object({
   area: z.enum(userAreas, { required_error: "Debes seleccionar un área." }),
   cultivo: z.enum(cultivos).optional(),
   unit: z.enum(units, { required_error: "Debes seleccionar una unidad." }),
-  images: z.any()
-    .refine((files) => !files || files.length === 0 || Array.from(files).every((file: any) => file.size <= MAX_IMAGE_SIZE_BYTES), {
-        message: `Cada imagen no debe superar ${MAX_IMAGE_SIZE_MB} MB.`,
-    }),
+  images: z.any(),
   technicalSheet: z.any()
     .refine((files) => !files || files.length === 0 || files[0].size <= MAX_PDF_SIZE_BYTES, {
         message: `El archivo PDF no debe superar los ${MAX_PDF_SIZE_MB} MB.`,
@@ -118,21 +114,6 @@ export function CreateProductDialog({ isOpen, onOpenChange }: CreateProductDialo
 
   function onSubmit(data: ProductFormValues) {
     startTransition(async () => {
-        const formData = new FormData();
-        Object.entries(data).forEach(([key, value]) => {
-            if (key === 'images' && value) {
-                for (let i = 0; i < value.length; i++) {
-                    formData.append('images', value[i]);
-                }
-            } else if (key === 'technicalSheet' && value && value.length > 0) {
-                formData.append('technicalSheet', value[0]);
-            } else if (value instanceof Date) {
-                formData.append(key, value.toISOString());
-            } else if (value !== undefined && value !== null) {
-                formData.append(key, value.toString());
-            }
-        });
-
         const productToSave: Omit<InventoryItem, 'batches' | 'images' | 'technical_sheet_url'> = {
           id: data.sku,
           name: data.name,
@@ -150,7 +131,24 @@ export function CreateProductDialog({ isOpen, onOpenChange }: CreateProductDialo
             stock: data.stock,
             expiry_date: data.expiryDate ? format(data.expiryDate, 'yyyy-MM-dd') : undefined,
         };
+        
+        const formData = new FormData();
 
+        if (data.images && data.images.length > 0) {
+            toast({ title: "Procesando imágenes...", description: "Comprimiendo imágenes antes de subirlas. Esto puede tardar un momento." });
+            const imageFiles = Array.from(data.images as FileList);
+            const compressedImages = await Promise.all(
+              imageFiles.map(file => compressImage(file))
+            );
+            for (const image of compressedImages) {
+              formData.append('images', image);
+            }
+        }
+
+        if (data.technicalSheet && data.technicalSheet.length > 0) {
+            formData.append('technicalSheet', data.technicalSheet[0]);
+        }
+        
         const result = await createProductAction(productToSave, initialBatch, formData);
         if (result.success) {
             toast({

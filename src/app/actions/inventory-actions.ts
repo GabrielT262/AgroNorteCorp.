@@ -154,122 +154,167 @@ export async function addStockAction(data: { productId: string; loteId: string; 
 
 export async function importInventoryAction(data: any[]) {
     const hardcodedUserId = 'usr_gabriel'; // Placeholder
-    let created = 0;
-    let updated = 0;
-    let errors = 0;
-    const errorMessages: string[] = [];
+    let processedCount = 0;
+    let createdCount = 0;
+    let updatedCount = 0;
+    const errorDetails: { row: number; message: string }[] = [];
+
     const categories: InventoryCategory[] = ["Herramientas", "Repuestos", "Fertilizantes", "Agroquímicos", "Varios", "Implementos de Riego", "Implementos de SST"];
     const units: InventoryUnit[] = ['Unidad', 'Kg', 'Litros', 'Metros'];
     const userAreas: UserArea[] = ['Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG', 'Administrador'];
     const cultivos: InventoryCultivo[] = ['Uva', 'Palto'];
 
+    type ProductImportRow = {
+        sku: string;
+        name: string;
+        description?: string;
+        category: InventoryCategory;
+        area: UserArea;
+        cultivo?: InventoryCultivo;
+        location: string;
+        unit: InventoryUnit;
+        lote_id: string;
+        stock: number;
+        expiry_date?: string | number | Date;
+    };
+
+    const normalizeHeaders = (row: any): Partial<ProductImportRow> => {
+        const mapping: { [key in keyof ProductImportRow]: string[] } = {
+            sku: ['sku', 'código', 'codigo'],
+            name: ['name', 'nombre', 'producto', 'nombre_del_producto'],
+            description: ['description', 'descripción', 'descripcion'],
+            category: ['category', 'categoría', 'categoria'],
+            area: ['area', 'área'],
+            cultivo: ['cultivo'],
+            location: ['location', 'ubicación', 'ubicacion'],
+            unit: ['unit', 'unidad', 'unidad_de_medida'],
+            lote_id: ['lote_id', 'loteid', 'lote', 'id_del_lote'],
+            stock: ['stock', 'cantidad', 'unidades'],
+            expiry_date: ['expiry_date', 'vencimiento', 'expiración', 'fecha_de_vencimiento']
+        };
+        const normalizedRow: Partial<ProductImportRow> = {};
+        for (const key in row) {
+            const normalizedKey = Object.keys(mapping).find(k =>
+                mapping[k as keyof ProductImportRow].includes(key.toLowerCase().trim().replace(/ /g, '_'))
+            ) as keyof ProductImportRow | undefined;
+
+            if (normalizedKey) {
+                normalizedRow[normalizedKey] = row[key];
+            }
+        }
+        return normalizedRow;
+    };
+
     const { data: allProducts, error: fetchAllError } = await supabase.from('inventory_items').select('id, batches, name, unit');
     if (fetchAllError) {
-        return { success: false, message: 'Error fetching existing products.' };
+        return { success: false, message: `Error al cargar productos existentes: ${fetchAllError.message}`, errors: 1, details: [{row: 0, message: fetchAllError.message}] };
     }
-
-    const productMap = new Map(allProducts.map(p => [p.id, p]));
-    const inventoryUpdates: any[] = [];
+    const productMap = new Map(allProducts.map(p => [p.id, p as InventoryItem]));
+    const pendingUpdates = new Map<string, InventoryItem>();
     const historyInserts: any[] = [];
 
-    for (const [index, row] of data.entries()) {
-        const { sku, name, description, category, area, cultivo, location, unit, lote_id, stock, expiry_date } = row;
-        
+    for (const [index, rawRow] of data.entries()) {
+        processedCount++;
         const rowNum = index + 2;
-        if (!sku || !name || !category || !area || !location || !unit || !lote_id || stock === undefined) {
-            errors++;
-            errorMessages.push(`Fila ${rowNum}: Faltan datos requeridos (sku, name, category, etc.).`);
+        const row = normalizeHeaders(rawRow) as ProductImportRow;
+
+        if (!row.sku || !row.name || !row.category || !row.area || !row.location || !row.unit || !row.lote_id || row.stock === undefined || row.stock === null) {
+            errorDetails.push({ row: rowNum, message: 'Faltan datos requeridos (SKU, Nombre, Categoría, Área, Ubicación, Unidad, Lote ID, Stock).' });
             continue;
         }
 
-        if (!categories.includes(category) || !units.includes(unit) || !userAreas.includes(area) || (cultivo && !cultivos.includes(cultivo))) {
-             errors++;
-             errorMessages.push(`Fila ${rowNum}: Valor inválido en categoría, unidad, área o cultivo.`);
-             continue;
+        if (!categories.includes(row.category) || !units.includes(row.unit) || !userAreas.includes(row.area) || (row.cultivo && !cultivos.includes(row.cultivo))) {
+            errorDetails.push({ row: rowNum, message: 'Valor inválido en Categoría, Unidad, Área o Cultivo.' });
+            continue;
+        }
+        if (isNaN(Number(row.stock)) || Number(row.stock) < 0) {
+            errorDetails.push({ row: rowNum, message: 'El Stock debe ser un número válido >= 0.' });
+            continue;
         }
 
-        const existingProduct = productMap.get(sku);
+        const productSKU = String(row.sku);
+        const loteID = String(row.lote_id);
+        const stockQty = Number(row.stock);
 
-        const newBatch: Batch = {
-            id: lote_id,
-            stock: Number(stock),
-            expiry_date: expiry_date ? new Date(expiry_date).toISOString().split('T')[0] : undefined,
-        };
-
-        if (existingProduct) {
-            const existingLote = existingProduct.batches.find((b: Batch) => b.id.toLowerCase() === lote_id.toLowerCase());
-            if (existingLote) {
-                errors++;
-                errorMessages.push(`Fila ${rowNum}: El lote ID "${lote_id}" ya existe para el producto ${sku}.`);
-                continue;
-            }
-            const updatedBatches = [...existingProduct.batches, newBatch];
-            inventoryUpdates.push({ id: sku, batches: updatedBatches });
-            updated++;
-        } else {
-            const newProduct: InventoryItem = {
-                id: sku,
-                name,
-                description: description || '',
-                category,
-                area,
-                cultivo: cultivo || undefined,
-                location,
-                unit,
-                images: [],
-                batches: [newBatch],
-                ai_hint: `${category} ${name}`,
-            };
-            inventoryUpdates.push(newProduct);
-            created++;
-        }
+        let productToUpdate: InventoryItem;
+        let isNewProductInImport = false;
         
+        if (pendingUpdates.has(productSKU)) {
+            productToUpdate = pendingUpdates.get(productSKU)!;
+        } else if (productMap.has(productSKU)) {
+            productToUpdate = JSON.parse(JSON.stringify(productMap.get(productSKU)!));
+            updatedCount++;
+        } else {
+            isNewProductInImport = true;
+            createdCount++;
+            productToUpdate = {
+                id: productSKU, name: row.name, description: row.description || '', category: row.category,
+                area: row.area, cultivo: row.cultivo || undefined, location: row.location,
+                unit: row.unit, images: [], batches: [], ai_hint: `${row.category} ${row.name}`,
+            };
+        }
+
+        const existingLote = productToUpdate.batches.find((b: Batch) => b.id.toLowerCase() === loteID.toLowerCase());
+        if (existingLote) {
+            errorDetails.push({ row: rowNum, message: `El lote ID "${loteID}" ya existe para el producto ${productSKU}.` });
+            continue;
+        }
+
+        let formattedExpiryDate: string | undefined = undefined;
+        if (row.expiry_date) {
+            try {
+                // Handle Excel's numeric date format
+                const date = typeof row.expiry_date === 'number' ? new Date(1900, 0, row.expiry_date - 1) : new Date(row.expiry_date);
+                if (!isNaN(date.getTime())) {
+                    formattedExpiryDate = date.toISOString().split('T')[0];
+                }
+            } catch (e) { /* Ignore invalid date formats */ }
+        }
+
+        const newBatch: Batch = { id: loteID, stock: stockQty, expiry_date: formattedExpiryDate };
+        productToUpdate.batches.push(newBatch);
+        if (isNewProductInImport) {
+            productToUpdate.name = row.name;
+            productToUpdate.category = row.category;
+            productToUpdate.unit = row.unit;
+        }
+
+        pendingUpdates.set(productSKU, productToUpdate);
+
         historyInserts.push({
-            id: `HIST-${uuidv4().slice(0, 12)}`,
-            date: new Date().toISOString(),
-            product_id: sku,
-            product_name: name,
-            type: 'Entrada',
-            quantity: Number(stock),
-            unit: unit,
-            requesting_area: 'Almacén',
-            user_id: hardcodedUserId,
-            lote_id: lote_id,
+            id: `HIST-${uuidv4().slice(0, 12)}`, date: new Date().toISOString(), product_id: productSKU,
+            product_name: productToUpdate.name, type: 'Entrada', quantity: stockQty,
+            unit: productToUpdate.unit, requesting_area: 'Almacén', user_id: hardcodedUserId, lote_id: loteID,
         });
     }
 
-    if(inventoryUpdates.length > 0) {
-        const { error: upsertError } = await supabase.from('inventory_items').upsert(inventoryUpdates, { onConflict: 'id' });
-        if(upsertError) {
-             return { success: false, message: `Error guardando productos: ${upsertError.message}` };
+    if (errorDetails.length > 0) {
+        return {
+            success: false, message: `La importación falló con ${errorDetails.length} errores.`,
+            details: errorDetails, processed: processedCount, created: 0,
+            updated: 0, errors: errorDetails.length,
+        };
+    }
+
+    if (pendingUpdates.size > 0) {
+        const { error: upsertError } = await supabase.from('inventory_items').upsert(Array.from(pendingUpdates.values()), { onConflict: 'id' });
+        if (upsertError) {
+            return { success: false, message: `Error al guardar productos: ${upsertError.message}`, errors: 1, details: [{row: 0, message: upsertError.message }] };
         }
     }
 
-    if(historyInserts.length > 0) {
+    if (historyInserts.length > 0) {
         const { error: historyError } = await supabase.from('inventory_history').insert(historyInserts);
-         if(historyError) {
-             return { success: false, message: `Error guardando historial: ${historyError.message}` };
+        if (historyError) {
+            return { success: false, message: `Error al guardar el historial: ${historyError.message}`, errors: 1, details: [{row: 0, message: historyError.message }] };
         }
     }
 
     revalidatePath('/dashboard/inventory');
 
-    if (errors > 0) {
-        return { 
-            success: false, 
-            message: errorMessages.slice(0, 3).join(' '),
-            processed: data.length,
-            created,
-            updated,
-            errors,
-        };
-    }
-
-    return { 
-        success: true,
-        processed: data.length,
-        created,
-        updated,
-        errors,
+    return {
+        success: true, message: `Se procesaron ${processedCount} filas.`,
+        processed: processedCount, created: createdCount,
+        updated: updatedCount, errors: 0,
     };
 }

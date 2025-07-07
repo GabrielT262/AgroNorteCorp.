@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useToast } from '@/hooks/use-toast';
 import { createGalleryPostAction } from '@/app/actions/gallery-actions';
+import { compressImage } from '@/lib/image-compressor';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -17,18 +18,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
 
-const MAX_IMAGE_SIZE_MB = 1;
-const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
-
 const formSchema = z.object({
   title: z.string().min(5, 'El título debe tener al menos 5 caracteres.'),
   description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres.'),
   ai_hint: z.string().optional(),
   images: z.any()
-    .refine((files) => files && files.length > 0, 'Debes subir al menos una imagen.')
-    .refine((files) => !files || files.length === 0 || Array.from(files).every((file: any) => file.size <= MAX_IMAGE_SIZE_BYTES), {
-        message: `Cada imagen no debe superar ${MAX_IMAGE_SIZE_MB} MB.`,
-    }),
+    .refine((files) => files && files.length > 0, 'Debes subir al menos una imagen.'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -53,18 +48,23 @@ export function CreateGalleryPostDialog({ isOpen, onOpenChange }: CreateGalleryP
   }, [isOpen, form]);
 
   const onSubmit = (data: FormValues) => {
-    const formData = new FormData();
-    formData.append('title', data.title);
-    formData.append('description', data.description);
-    if (data.ai_hint) formData.append('ai_hint', data.ai_hint);
-    
-    if (data.images && data.images.length > 0) {
-      for (let i = 0; i < data.images.length; i++) {
-        formData.append('images', data.images[i]);
-      }
-    }
-    
     startSubmitTransition(async () => {
+        const formData = new FormData();
+        formData.append('title', data.title);
+        formData.append('description', data.description);
+        if (data.ai_hint) formData.append('ai_hint', data.ai_hint);
+        
+        if (data.images && data.images.length > 0) {
+            toast({ title: "Procesando imágenes...", description: "Comprimiendo imágenes antes de subirlas. Esto puede tardar un momento." });
+            const imageFiles = Array.from(data.images as FileList);
+            const compressedImages = await Promise.all(
+              imageFiles.map(file => compressImage(file))
+            );
+            for (const image of compressedImages) {
+              formData.append('images', image);
+            }
+        }
+        
         const result = await createGalleryPostAction(formData);
         if (result.success) {
             toast({ title: "Publicación Enviada", description: "Tu logro ha sido enviado a aprobación." });

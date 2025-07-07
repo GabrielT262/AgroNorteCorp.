@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { updateUserProfileAction } from '@/app/actions/user-actions';
 import Image from 'next/image';
 import type { ManagedUser } from '@/lib/types';
+import { compressImage } from '@/lib/image-compressor';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,6 @@ const passwordFormSchema = z
   });
 
 type PasswordFormValues = z.infer<typeof passwordFormSchema>;
-const MAX_IMAGE_SIZE_BYTES = 1 * 1024 * 1024; // 1MB
 
 interface SettingsClientProps {
     currentUser: ManagedUser;
@@ -43,12 +43,11 @@ export default function SettingsClient({ currentUser }: SettingsClientProps) {
   const { setTheme, theme } = useTheme();
   const { toast } = useToast();
   const [isSavingProfile, startSavingProfileTransition] = React.useTransition();
-  const [avatarError, setAvatarError] = React.useState<string | null>(null);
-  const [signatureError, setSignatureError] = React.useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
+  const [signatureFile, setSignatureFile] = React.useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
   const [signaturePreview, setSignaturePreview] = React.useState<string | null>(null);
   
-  const profileFormRef = React.useRef<HTMLFormElement>(null);
   const avatarInputRef = React.useRef<HTMLInputElement>(null);
   const signatureInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -68,20 +67,19 @@ export default function SettingsClient({ currentUser }: SettingsClientProps) {
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'signature') => {
     const file = e.target.files?.[0] || null;
-    const errorSetter = type === 'avatar' ? setAvatarError : setSignatureError;
     const previewSetter = type === 'avatar' ? setAvatarPreview : setSignaturePreview;
-    
-    errorSetter(null);
+
     if (!file) {
+      if (type === 'avatar') setAvatarFile(null);
+      else setSignatureFile(null);
       previewSetter(null);
       return;
     }
 
-    if (file.size > MAX_IMAGE_SIZE_BYTES) {
-      errorSetter(`La imagen no debe superar 1 MB.`);
-      previewSetter(null);
-      if (e.target) e.target.value = ''; // Clear file input
-      return;
+    if (type === 'avatar') {
+      setAvatarFile(file);
+    } else {
+      setSignatureFile(file);
     }
     
     const reader = new FileReader();
@@ -92,21 +90,38 @@ export default function SettingsClient({ currentUser }: SettingsClientProps) {
   };
 
   const handleProfileSave = () => {
-    if (profileFormRef.current) {
-      const formData = new FormData(profileFormRef.current);
-      startSavingProfileTransition(async () => {
-        const result = await updateUserProfileAction(currentUser.id, formData);
-        if (result.success) {
-          toast({ title: 'Perfil Actualizado', description: 'Tus cambios han sido guardados.' });
-          setAvatarPreview(null);
-          setSignaturePreview(null);
-          if (avatarInputRef.current) avatarInputRef.current.value = '';
-          if (signatureInputRef.current) signatureInputRef.current.value = '';
-        } else {
-          toast({ title: 'Error', description: result.message || 'No se pudo actualizar tu perfil.', variant: 'destructive' });
-        }
-      });
+    if (!avatarFile && !signatureFile) {
+      toast({ title: 'Sin cambios', description: 'No has seleccionado ninguna imagen nueva.' });
+      return;
     }
+
+    startSavingProfileTransition(async () => {
+      const formData = new FormData();
+
+      if (avatarFile) {
+        toast({ title: 'Procesando foto...', description: 'La imagen se está comprimiendo.' });
+        const compressed = await compressImage(avatarFile);
+        formData.append('avatar', compressed, compressed.name);
+      }
+      if (signatureFile) {
+        toast({ title: 'Procesando firma...', description: 'La imagen se está comprimiendo.' });
+        const compressed = await compressImage(signatureFile);
+        formData.append('signature', compressed, compressed.name);
+      }
+
+      const result = await updateUserProfileAction(currentUser.id, formData);
+      if (result.success) {
+        toast({ title: 'Perfil Actualizado', description: 'Tus cambios han sido guardados.' });
+        setAvatarPreview(null);
+        setSignaturePreview(null);
+        setAvatarFile(null);
+        setSignatureFile(null);
+        if (avatarInputRef.current) avatarInputRef.current.value = '';
+        if (signatureInputRef.current) signatureInputRef.current.value = '';
+      } else {
+        toast({ title: 'Error', description: result.message || 'No se pudo actualizar tu perfil.', variant: 'destructive' });
+      }
+    });
   };
 
   return (
@@ -122,7 +137,7 @@ export default function SettingsClient({ currentUser }: SettingsClientProps) {
         
         <TabsContent value="profile">
           <Card>
-           <form ref={profileFormRef}>
+           <form>
             <CardHeader>
               <CardTitle>Perfil Público</CardTitle>
               <CardDescription>Esta información, junto a tu foto y firma, será visible para otros usuarios.</CardDescription>
@@ -140,8 +155,7 @@ export default function SettingsClient({ currentUser }: SettingsClientProps) {
                                 <ImageIcon className="mr-2" /> Cambiar Foto
                             </Button>
                             <Input ref={avatarInputRef} name="avatar" type="file" accept="image/*" className="hidden" onChange={e => handleFileChange(e, 'avatar')} />
-                            <p className="text-xs text-muted-foreground">Sube un archivo de imagen (JPG, PNG). Máx 1MB.</p>
-                             {avatarError && <p className="text-sm font-medium text-destructive mt-2">{avatarError}</p>}
+                            <p className="text-xs text-muted-foreground">Sube un archivo de imagen (JPG, PNG). Se comprimirá si supera 1MB.</p>
                         </div>
                     </div>
                 </div>
@@ -157,8 +171,7 @@ export default function SettingsClient({ currentUser }: SettingsClientProps) {
                                 <PenSquare className="mr-2" /> Cambiar Firma
                             </Button>
                             <Input ref={signatureInputRef} name="signature" type="file" accept="image/*" className="hidden" onChange={e => handleFileChange(e, 'signature')}/>
-                            <p className="text-xs text-muted-foreground">Sube una imagen de tu firma. Máx 1MB.</p>
-                            {signatureError && <p className="text-sm font-medium text-destructive mt-2">{signatureError}</p>}
+                            <p className="text-xs text-muted-foreground">Sube una imagen de tu firma. Se comprimirá si supera 1MB.</p>
                         </div>
                     </div>
                 </div>
