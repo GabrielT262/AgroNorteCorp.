@@ -180,7 +180,7 @@ export default function LoginPage() {
                     fill
                     objectFit="cover"
                     quality={100}
-                    className="z-0"
+                    className="z-0 blur-sm"
                 />
             ) : (
                 <div className="w-full h-full bg-background z-0"></div>
@@ -387,3 +387,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+    
