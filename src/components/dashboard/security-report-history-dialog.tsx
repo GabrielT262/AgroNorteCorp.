@@ -64,6 +64,7 @@ export function SecurityReportHistoryDialog({ allReports, isOpen, onOpenChange }
                     <TableBody>
                         {sortedReports.map(report => {
                             const { icon: Icon, label } = typeInfo[report.type];
+                            const authorName = report.users ? `${report.users.name} ${report.users.last_name}` : 'Usuario del Sistema';
                             return (
                                 <TableRow key={report.id}>
                                     <TableCell className="font-medium whitespace-nowrap">{format(parseISO(report.date), "dd/MM/yy HH:mm", { locale: es })}</TableCell>
@@ -74,7 +75,7 @@ export function SecurityReportHistoryDialog({ allReports, isOpen, onOpenChange }
                                             <span>{label}</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell>{report.author}</TableCell>
+                                    <TableCell>{authorName}</TableCell>
                                     <TableCell>
                                         <Badge variant="outline" className={cn("border-transparent", statusVariant[report.status])}>{report.status}</Badge>
                                     </TableCell>

@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -11,17 +12,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel"
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { FileText, Truck, MapPin, Tag, Sprout, Calendar, Building2 } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { MapPin, Tag, Sprout, Calendar, Building2, FileText, Package } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -34,13 +29,14 @@ interface ProductDetailDialogProps {
 export function ProductDetailDialog({ item, isOpen, onOpenChange }: ProductDetailDialogProps) {
   if (!item) return null;
 
+  const totalStock = item.batches.reduce((sum, batch) => sum + batch.stock, 0);
+  const status = totalStock <= 0 ? 'Agotado' : totalStock <= 10 ? 'Poco Stock' : 'En Stock';
+  
   const statusVariant = {
     "En Stock": "default",
     "Poco Stock": "secondary",
     "Agotado": "destructive",
   } as const;
-  
-  const allImages = item.images && item.images.length > 0 ? item.images : ['https://placehold.co/600x600.png'];
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -51,27 +47,17 @@ export function ProductDetailDialog({ item, isOpen, onOpenChange }: ProductDetai
         </DialogHeader>
         <div className="grid md:grid-cols-2 gap-8 py-4">
           <div className="flex flex-col items-center">
-             <Carousel className="w-full max-w-xs">
-              <CarouselContent>
-                {allImages.map((src, index) => (
-                  <CarouselItem key={index}>
-                    <div className="p-1">
-                       <div className="aspect-square relative bg-muted rounded-lg overflow-hidden">
-                        <Image
-                            src={src}
-                            alt={`${item.name} - foto ${index + 1}`}
-                            fill
-                            className="object-cover"
-                            data-ai-hint={item.aiHint}
-                        />
-                       </div>
-                    </div>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              <CarouselPrevious />
-              <CarouselNext />
-            </Carousel>
+             <div className="w-full max-w-xs p-1">
+                <div className="aspect-square relative bg-muted rounded-lg overflow-hidden">
+                <Image
+                    src={item.images?.[0] || 'https://placehold.co/600x600.png'}
+                    alt={`${item.name}`}
+                    fill
+                    className="object-cover"
+                    data-ai-hint={item.ai_hint}
+                />
+                </div>
+             </div>
           </div>
           <div className="space-y-4">
             <div>
@@ -110,36 +96,38 @@ export function ProductDetailDialog({ item, isOpen, onOpenChange }: ProductDetai
                         </div>
                     </div>
                 )}
-                {item.expiryDate && (
-                    <div className="flex items-start gap-2">
-                        <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                        <div>
-                            <p className="font-medium">Vencimiento</p>
-                            <p className="text-muted-foreground">{format(parseISO(item.expiryDate), "PPP", { locale: es })}</p>
-                        </div>
-                    </div>
-                )}
-                 <div className="flex items-start gap-2">
-                    <p className="font-medium pt-0.5">Estado:</p>
-                    <Badge variant={statusVariant[item.status]}>{item.status}</Badge>
+                 <div className="flex items-start gap-2 col-span-2">
+                    <p className="font-medium pt-0.5">Estado General:</p>
+                    <Badge variant={statusVariant[status]}>{status} ({totalStock} {item.unit})</Badge>
                  </div>
             </div>
-
             <Separator />
-            
-            <div className="flex gap-2">
-              <Button asChild variant="outline" disabled={!item.technicalSheetUrl}>
-                <a href={item.technicalSheetUrl} target="_blank" rel="noopener noreferrer">
-                    <FileText className="mr-2" />
-                    Ficha Técnica
-                </a>
-              </Button>
-              <Button asChild variant="outline" disabled={!item.remissionGuideUrl}>
-                <a href={item.remissionGuideUrl} target="_blank" rel="noopener noreferrer">
-                    <Truck className="mr-2" />
-                    Guía de Remisión
-                </a>
-              </Button>
+             <div>
+              <h3 className="font-semibold text-lg mb-2 flex items-center gap-2"><Package className="h-5 w-5"/> Desglose de Lotes</h3>
+              <ScrollArea className="h-40 w-full rounded-md border">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>ID Lote</TableHead>
+                            <TableHead>Stock</TableHead>
+                            <TableHead>Vencimiento</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {item.batches.map(batch => (
+                            <TableRow key={batch.id}>
+                                <TableCell className="font-medium">{batch.id}</TableCell>
+                                <TableCell>{batch.stock} {item.unit}</TableCell>
+                                <TableCell>
+                                    {batch.expiry_date 
+                                        ? format(parseISO(batch.expiry_date), "dd/MM/yyyy", { locale: es })
+                                        : '-'}
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+              </ScrollArea>
             </div>
           </div>
         </div>

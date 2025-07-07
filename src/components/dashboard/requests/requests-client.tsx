@@ -86,37 +86,40 @@ export function RequestsClient({ initialOrders, currentUser }: RequestsClientPro
           </TableRow>
         </TableHeader>
         <TableBody>
-          {orders.map(order => (
-            <TableRow key={order.id}>
-              <TableCell className="font-medium">{order.id}</TableCell>
-              <TableCell>{order.items.length} producto(s)</TableCell>
-              <TableCell>{order.requesting_user_name} ({order.requesting_area})</TableCell>
-              <TableCell>
-                <Badge variant={statusBadgeVariant[order.status]}>{order.status}</Badge>
-              </TableCell>
-              <TableCell className="text-right">
-                {isPending && <Loader2 className="h-4 w-4 animate-spin ml-auto" />}
-                {!isPending && type === 'approval' && (
-                  <div className="flex gap-2 justify-end">
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:text-green-600 hover:bg-green-100" onClick={() => handleApprove(order)}><Check className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:text-red-600 hover:bg-red-100" onClick={() => handleReject(order)}><X className="h-4 w-4" /></Button>
-                  </div>
-                )}
-                {!isPending && type === 'dispatch' && (
-                  <div className="flex gap-2 justify-end">
-                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setOrderToPrint(order)}>
-                      <Printer className="h-4 w-4" />
-                      <span className="sr-only">Imprimir Vale</span>
-                    </Button>
-                    <Button size="sm" onClick={() => handleDispatch(order)}><Truck className="mr-2 h-4 w-4" />Despachar</Button>
-                  </div>
-                )}
-                {!isPending && (type === 'history' || type === 'user') && (
-                  <span className="text-xs text-muted-foreground">-</span>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
+          {orders.map(order => {
+            const userName = order.users ? `${order.users.name} ${order.users.last_name}` : 'Usuario no encontrado';
+            return (
+                <TableRow key={order.id}>
+                <TableCell className="font-medium">{order.id}</TableCell>
+                <TableCell>{order.items.length} producto(s)</TableCell>
+                <TableCell>{userName} ({order.requesting_area})</TableCell>
+                <TableCell>
+                    <Badge variant={statusBadgeVariant[order.status]}>{order.status}</Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                    {isPending && <Loader2 className="h-4 w-4 animate-spin ml-auto" />}
+                    {!isPending && type === 'approval' && (
+                    <div className="flex gap-2 justify-end">
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:text-green-600 hover:bg-green-100" onClick={() => handleApprove(order)}><Check className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:text-red-600 hover:bg-red-100" onClick={() => handleReject(order)}><X className="h-4 w-4" /></Button>
+                    </div>
+                    )}
+                    {!isPending && type === 'dispatch' && (
+                    <div className="flex gap-2 justify-end">
+                        <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setOrderToPrint(order)}>
+                        <Printer className="h-4 w-4" />
+                        <span className="sr-only">Imprimir Vale</span>
+                        </Button>
+                        <Button size="sm" onClick={() => handleDispatch(order)}><Truck className="mr-2 h-4 w-4" />Despachar</Button>
+                    </div>
+                    )}
+                    {!isPending && (type === 'history' || type === 'user') && (
+                    <span className="text-xs text-muted-foreground">-</span>
+                    )}
+                </TableCell>
+                </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
     );

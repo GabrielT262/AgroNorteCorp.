@@ -1,44 +1,29 @@
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/db';
-import * as schema from '@/lib/schema';
-import type { RecentOrder, OrderItem, UserArea } from '@/lib/types';
-import { eq } from 'drizzle-orm';
+import { supabase } from '@/lib/supabase';
+import type { RecentOrder, UserArea, InventoryHistoryEntry, Batch, InventoryItem } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
+import { createNotificationAction } from './notification-actions';
 
-// This is a placeholder for a real notification system
-async function addNotification(notification: { title: string, description: string, recipientArea: UserArea | 'Gerencia', path?: string }) {
-    console.log('NOTIFICACION:', notification);
-    // In a real app, you would insert this into a notifications table in the database.
-}
-
-export async function createOrderAction(orderData: Omit<RecentOrder, 'id' | 'date' | 'status'>) {
+export async function createOrderAction(orderData: Omit<RecentOrder, 'id' | 'date' | 'status' | 'users'>) {
   const newOrderId = `ORD-${uuidv4().slice(0, 8).toUpperCase()}`;
   try {
-    await db.insert(schema.orders).values({
-      id: newOrderId,
+    const newOrder: Omit<RecentOrder, 'id' | 'users'> = {
       status: 'Pendiente',
       ...orderData,
-      date: new Date(),
-    });
+      date: new Date().toISOString(),
+    };
 
-    if (orderData.items.length > 0) {
-        await db.insert(schema.orderItems).values(orderData.items.map(item => ({
-            id: `ITEM-${uuidv4()}`,
-            orderId: newOrderId,
-            itemId: item.itemId,
-            name: item.name,
-            quantity: item.quantity,
-            unit: item.unit,
-            usageDescription: item.usageDescription,
-        })));
-    }
+    const { error } = await supabase.from('orders').insert({ id: newOrderId, ...newOrder });
+    if(error) throw error;
     
-    await addNotification({
+    await createNotificationAction({
         title: 'Nueva Solicitud de Pedido',
-        description: `Se ha creado una nueva solicitud (${newOrderId}). Revisar y aprobar.`,
-        recipientArea: 'Gerencia'
+        description: `El área de ${orderData.requesting_area} ha creado la solicitud ${newOrderId}.`,
+        recipient_id: 'Gerencia',
+        path: '/dashboard/requests'
     });
 
     revalidatePath('/dashboard/requests');
@@ -47,26 +32,25 @@ export async function createOrderAction(orderData: Omit<RecentOrder, 'id' | 'dat
 
   } catch (error) {
     console.error('Error creating order:', error);
-    return { success: false, message: 'Error de base de datos al crear el pedido.' };
+    return { success: false, message: 'Error al crear el pedido.' };
   }
 }
 
 export async function approveOrderAction(order: RecentOrder) {
   try {
-    await db.update(schema.orders)
-      .set({ status: 'Aprobado' })
-      .where(eq(schema.orders.id, order.id));
+    const { error } = await supabase.from('orders').update({ status: 'Aprobado' }).eq('id', order.id);
+    if(error) throw error;
 
-    await addNotification({
+    await createNotificationAction({
         title: 'Pedido Aprobado para Despacho',
         description: `El pedido ${order.id} está listo para ser despachado.`,
-        recipientArea: 'Almacén',
+        recipient_id: 'Almacén',
         path: '/dashboard/requests'
     });
-    await addNotification({
+    await createNotificationAction({
         title: `Tu Pedido ${order.id} Fue Aprobado`,
         description: 'Tu pedido ha sido aprobado y será preparado por almacén.',
-        recipientArea: order.requestingArea,
+        recipient_id: order.requesting_area,
         path: '/dashboard/requests'
     });
     
@@ -75,20 +59,19 @@ export async function approveOrderAction(order: RecentOrder) {
     return { success: true };
   } catch (error) {
     console.error('Error approving order:', error);
-    return { success: false, message: 'Error de base de datos.' };
+    return { success: false, message: 'Error en la acción.' };
   }
 }
 
 export async function rejectOrderAction(orderId: string, recipientArea: UserArea) {
     try {
-        await db.update(schema.orders)
-            .set({ status: 'Rechazado' })
-            .where(eq(schema.orders.id, orderId));
+        const { error } = await supabase.from('orders').update({ status: 'Rechazado' }).eq('id', orderId);
+        if(error) throw error;
         
-        await addNotification({
+        await createNotificationAction({
             title: `Tu Pedido ${orderId} Fue Rechazado`,
             description: 'Ponte en contacto con Gerencia para más detalles.',
-            recipientArea: recipientArea,
+            recipient_id: recipientArea,
             path: '/dashboard/requests'
         });
         
@@ -97,28 +80,97 @@ export async function rejectOrderAction(orderId: string, recipientArea: UserArea
         return { success: true };
     } catch (error) {
         console.error('Error rejecting order:', error);
-        return { success: false, message: 'Error de base de datos.' };
+        return { success: false, message: 'Error en la acción.' };
     }
 }
 
 export async function dispatchOrderAction(order: RecentOrder) {
     try {
-        await db.update(schema.orders)
-            .set({ status: 'Despachado' })
-            .where(eq(schema.orders.id, order.id));
+        // Fetch all inventory items needed for the order in one go
+        const itemIds = order.items.map(item => item.item_id);
+        const { data: inventoryItems, error: fetchError } = await supabase
+            .from('inventory_items')
+            .select('id, name, batches')
+            .in('id', itemIds);
+
+        if (fetchError) throw fetchError;
         
-        await addNotification({
+        // Check if all items can be dispatched
+        for (const item of order.items) {
+            const inventoryItem = inventoryItems.find(invItem => invItem.id === item.item_id);
+            const totalStock = inventoryItem?.batches.reduce((sum, batch) => sum + batch.stock, 0) || 0;
+            if (!inventoryItem || totalStock < item.quantity) {
+                return { success: false, message: `Stock insuficiente para "${item.name}". Stock actual: ${totalStock}.` };
+            }
+        }
+        
+        const inventoryUpdates = [];
+        const historyInserts: Omit<InventoryHistoryEntry, 'id' | 'users'>[] = [];
+
+        // All items have enough stock, proceed with dispatch logic
+        for (const item of order.items) {
+            const inventoryItem = inventoryItems.find(invItem => invItem.id === item.item_id);
+            if(inventoryItem) {
+                let quantityToDispatch = item.quantity;
+
+                const sortedBatches = [...inventoryItem.batches].sort((a, b) => {
+                    if (a.expiry_date && b.expiry_date) return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+                    if (a.expiry_date) return -1;
+                    if (b.expiry_date) return 1;
+                    return 0;
+                });
+
+                for (const batch of sortedBatches) {
+                    if (quantityToDispatch <= 0) break;
+                    const stockToTake = Math.min(quantityToDispatch, batch.stock);
+                    if (stockToTake > 0) {
+                        batch.stock -= stockToTake;
+                        quantityToDispatch -= stockToTake;
+
+                        historyInserts.push({
+                            date: new Date().toISOString(),
+                            product_id: item.item_id,
+                            product_name: item.name,
+                            type: 'Salida',
+                            quantity: stockToTake,
+                            unit: item.unit,
+                            requesting_area: order.requesting_area,
+                            user_id: order.requesting_user_id,
+                            order_id: order.id,
+                            lote_id: batch.id,
+                        });
+                    }
+                }
+                inventoryUpdates.push({ id: inventoryItem.id, batches: sortedBatches });
+            }
+        }
+
+        // Batch update inventory items
+        const { error: updateError } = await supabase.from('inventory_items').upsert(inventoryUpdates);
+        if (updateError) throw updateError;
+        
+        // Batch insert history
+        const historyWithIds = historyInserts.map(h => ({ ...h, id: `HIST-OUT-${uuidv4().slice(0, 8)}`}));
+        const { error: historyError } = await supabase.from('inventory_history').insert(historyWithIds);
+        if(historyError) throw historyError;
+        
+        // Update order status
+        const { error: orderError } = await supabase.from('orders').update({ status: 'Despachado' }).eq('id', order.id);
+        if(orderError) throw orderError;
+        
+        await createNotificationAction({
             title: `Tu Pedido ${order.id} ha sido Despachado`,
             description: 'Los productos de tu solicitud ya han salido del almacén.',
-            recipientArea: order.requestingArea,
+            recipient_id: order.requesting_area,
             path: '/dashboard/requests'
         });
         
         revalidatePath('/dashboard/requests');
         revalidatePath('/dashboard');
+        revalidatePath('/dashboard/inventory');
         return { success: true };
     } catch (error) {
         console.error('Error dispatching order:', error);
-        return { success: false, message: 'Error de base de datos.' };
+        return { success: false, message: 'Error en la acción de despacho.' };
     }
 }

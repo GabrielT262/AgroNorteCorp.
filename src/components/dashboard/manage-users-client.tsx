@@ -3,13 +3,13 @@
 import * as React from 'react';
 import type { ManagedUser } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { deleteUserAction } from '@/app/actions/user-actions';
+import { deleteUserAction, approveUserAction } from '@/app/actions/user-actions';
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, MoreVertical, Pencil, Trash2, Loader2, Mail } from 'lucide-react';
+import { PlusCircle, MoreVertical, Pencil, Trash2, Loader2, Mail, CheckCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
@@ -28,7 +28,6 @@ interface ManageUsersClientProps {
 }
 
 export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
-  const [users, setUsers] = React.useState(initialUsers);
   const { toast } = useToast();
   const [isCreateDialogOpen, setCreateDialogOpen] = React.useState(false);
   const [editingUser, setEditingUser] = React.useState<ManagedUser | null>(null);
@@ -57,6 +56,17 @@ export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
       setDeletingUser(null);
     });
   };
+  
+  const handleApprove = (userId: string, userName: string) => {
+    startTransition(async () => {
+      const result = await approveUserAction(userId);
+      if (result.success) {
+        toast({ title: 'Usuario Aprobado', description: `El usuario "${userName}" ha sido activado.`});
+      } else {
+        toast({ title: 'Error al Aprobar', description: result.message, variant: 'destructive' });
+      }
+    });
+  };
 
   const handleNotifyByEmail = (user: ManagedUser) => {
     if (!user.email) return;
@@ -72,7 +82,7 @@ export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight font-headline">Gestionar Usuarios</h1>
-            <p className="text-muted-foreground">Crea, edita y elimina cuentas de usuario.</p>
+            <p className="text-muted-foreground">Crea, edita, aprueba y elimina cuentas de usuario.</p>
           </div>
           <Button onClick={handleOpenCreateDialog}>
             <PlusCircle className="mr-2 h-4 w-4" />
@@ -83,7 +93,7 @@ export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
         <Card>
           <CardHeader>
             <CardTitle>Lista de Usuarios</CardTitle>
-            <CardDescription>Un total de {users.length} usuarios en el sistema.</CardDescription>
+            <CardDescription>Un total de {initialUsers.length} usuarios en el sistema.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="border rounded-md">
@@ -91,23 +101,27 @@ export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Usuario</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Apellidos</TableHead>
-                    <TableHead>Correo Electrónico</TableHead>
+                    <TableHead>Nombre Completo</TableHead>
+                    <TableHead>Correo</TableHead>
                     <TableHead>Área</TableHead>
                     <TableHead>Rol</TableHead>
+                    <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map(user => (
+                  {initialUsers.map(user => (
                     <TableRow key={user.id}>
                       <TableCell className="font-mono">{user.username}</TableCell>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell>{user.lastName}</TableCell>
+                      <TableCell className="font-medium">{user.name} {user.last_name}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.area}</TableCell>
                       <TableCell><Badge variant={user.role === 'Administrador' ? 'default' : 'secondary'}>{user.role}</Badge></TableCell>
+                       <TableCell>
+                        <Badge variant={user.status === 'active' ? 'secondary' : 'destructive'}>
+                          {user.status === 'active' ? 'Activo' : 'Pendiente'}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
                         {isPending && <Loader2 className="h-4 w-4 animate-spin ml-auto" />}
                         {!isPending && (
@@ -118,11 +132,17 @@ export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              {user.status === 'pending' && (
+                                <DropdownMenuItem onClick={() => handleApprove(user.id, user.name)}>
+                                  <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                  <span>Aprobar Usuario</span>
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem onClick={() => handleEdit(user)}>
                                 <Pencil className="mr-2 h-4 w-4" />
                                 <span>Editar</span>
                               </DropdownMenuItem>
-                              {user.email && (
+                              {user.email && user.status === 'active' && (
                                 <DropdownMenuItem onClick={() => handleNotifyByEmail(user)}>
                                   <Mail className="mr-2 h-4 w-4" />
                                   <span>Notificar Aprobación</span>
@@ -157,7 +177,7 @@ export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. Esto eliminará permanentemente al usuario "{deletingUser?.name} {deletingUser?.lastName}".
+              Esta acción no se puede deshacer. Esto eliminará permanentemente al usuario "{deletingUser?.name} {deletingUser?.last_name}".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

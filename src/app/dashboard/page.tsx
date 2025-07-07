@@ -1,4 +1,4 @@
-'use server';
+
 
 import * as React from 'react';
 import {
@@ -26,14 +26,13 @@ import {
   Droplet,
   TriangleAlert,
   Wrench,
-  Loader2,
 } from 'lucide-react';
-import type { User, ExpiringProduct, RecentOrder, InventoryItem } from '@/lib/types';
+import type { User, ExpiringProduct, RecentOrder } from '@/lib/types';
 import Link from 'next/link';
-import { differenceInDays, parseISO } from 'date-fns';
 import { getDashboardData } from '@/lib/db';
-import { approveOrderAction } from '@/app/actions/order-actions';
 import { ApproveOrderButton } from './approve-order-button';
+
+export const dynamic = 'force-dynamic';
 
 const AdminDashboard = async () => {
   // In a real app, this would come from an authentication context/provider
@@ -50,18 +49,6 @@ const AdminDashboard = async () => {
     pendingOrdersCount,
     fuelLevels,
   } = await getDashboardData(currentUser);
-
-  const expiringProductsData: ExpiringProduct[] = expiringProducts.map((item) => {
-    const daysLeft = differenceInDays(
-      parseISO(item.expiryDate!),
-      new Date()
-    );
-    return {
-      name: item.name,
-      stock: item.stock,
-      expiresIn: daysLeft <= 0 ? 'Vencido' : `${daysLeft} días`,
-    };
-  });
 
   const statusBadgeVariant: { [key in RecentOrder['status']]: BadgeProps['variant'] } =
     {
@@ -199,7 +186,7 @@ const AdminDashboard = async () => {
           <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
               <TriangleAlert className="h-5 w-5 text-yellow-500" />
-              <CardTitle>Productos por Vencer</CardTitle>
+              <CardTitle>Lotes por Vencer</CardTitle>
             </div>
             <Link href="/dashboard/inventory">
               <Button variant="ghost" size="sm">
@@ -209,22 +196,22 @@ const AdminDashboard = async () => {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
-              Items que expiran en los próximos 30 días.
+              Lotes que expiran en los próximos 30 días.
             </p>
-            {expiringProductsData.length > 0 ? (
+            {expiringProducts.length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Producto</TableHead>
+                    <TableHead>Producto (Lote)</TableHead>
                     <TableHead>Vence en</TableHead>
                     <TableHead className="text-right">Stock</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {expiringProductsData.map((product) => (
-                    <TableRow key={product.name}>
+                  {expiringProducts.map((product) => (
+                    <TableRow key={`${product.name}-${product.loteId}`}>
                       <TableCell className="font-medium">
-                        {product.name}
+                        {product.name} <span className="text-muted-foreground text-xs">({product.loteId})</span>
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -246,7 +233,7 @@ const AdminDashboard = async () => {
               </Table>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">
-                No hay productos por vencer pronto.
+                No hay lotes por vencer pronto.
               </p>
             )}
           </CardContent>

@@ -59,18 +59,21 @@ export function InventoryHistoryDialog({ history, isOpen, onOpenChange }: Invent
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(entry => (
-                        <TableRow key={entry.id}>
-                            <TableCell className="font-medium whitespace-nowrap">{format(new Date(entry.date), "dd/MM/yyyy HH:mm", { locale: es })}</TableCell>
-                            <TableCell>{entry.productName}</TableCell>
-                            <TableCell>
-                                <Badge variant="outline" className={typeVariant[entry.type]}>{entry.type}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right">{entry.quantity} {entry.unit}</TableCell>
-                            <TableCell>{entry.requestingArea}</TableCell>
-                            <TableCell>{entry.user}</TableCell>
-                        </TableRow>
-                        ))}
+                        {history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(entry => {
+                            const userName = entry.users ? `${entry.users.name} ${entry.users.last_name}` : entry.user_id;
+                            return (
+                                <TableRow key={entry.id}>
+                                    <TableCell className="font-medium whitespace-nowrap">{format(new Date(entry.date), "dd/MM/yyyy HH:mm", { locale: es })}</TableCell>
+                                    <TableCell>{entry.product_name}</TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className={typeVariant[entry.type]}>{entry.type}</Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right">{entry.quantity} {entry.unit}</TableCell>
+                                    <TableCell>{entry.requesting_area}</TableCell>
+                                    <TableCell>{userName}</TableCell>
+                                </TableRow>
+                            )
+                        })}
                     </TableBody>
                 </Table>
             </ScrollArea>

@@ -23,18 +23,18 @@ const vehicleTypes: VehicleType[] = ['Tractor', 'Camión', 'Camioneta', 'Moto Li
 const shifts: Shift[] = ['Día', 'Noche'];
 
 const formSchema = z.object({
-  fuelType: z.enum(['Gasolina', 'Petróleo'], { required_error: 'Requerido' }),
+  fuel_type: z.enum(['Gasolina', 'Petróleo'], { required_error: 'Requerido' }),
   area: z.enum(userAreas, { required_error: 'Requerido' }),
   user: z.string().min(3, 'Debe tener al menos 3 caracteres'),
   shift: z.enum(shifts, { required_error: 'Requerido' }),
-  vehicleType: z.enum(vehicleTypes, { required_error: 'Requerido' }),
+  vehicle_type: z.enum(vehicleTypes, { required_error: 'Requerido' }),
   quantity: z.coerce.number().min(0.1, 'Debe ser mayor a 0'),
   horometro: z.coerce.number().optional(),
   kilometraje: z.coerce.number().optional(),
-}).refine(data => !(data.vehicleType === 'Tractor' && !data.horometro), {
+}).refine(data => !(data.vehicle_type === 'Tractor' && !data.horometro), {
     message: "Horómetro es requerido para Tractores",
     path: ["horometro"],
-}).refine(data => !(data.vehicleType === 'Camioneta' && !data.kilometraje), {
+}).refine(data => !(data.vehicle_type === 'Camioneta' && !data.kilometraje), {
     message: "Kilometraje es requerido para Camionetas",
     path: ["kilometraje"],
 });
@@ -43,9 +43,10 @@ const formSchema = z.object({
 interface DispatchFuelDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  onFinished: () => void;
 }
 
-export function DispatchFuelDialog({ isOpen, onOpenChange }: DispatchFuelDialogProps) {
+export function DispatchFuelDialog({ isOpen, onOpenChange, onFinished }: DispatchFuelDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, startTransition] = React.useTransition();
   
@@ -58,6 +59,7 @@ export function DispatchFuelDialog({ isOpen, onOpenChange }: DispatchFuelDialogP
       const result = await dispatchFuelAction(data);
       if (result.success) {
         toast({ title: "Despacho Registrado", description: "Se ha registrado la salida de combustible." });
+        onFinished();
         onOpenChange(false);
       } else {
         toast({ title: "Error", description: result.message || "No se pudo registrar el despacho.", variant: "destructive" });
@@ -71,7 +73,7 @@ export function DispatchFuelDialog({ isOpen, onOpenChange }: DispatchFuelDialogP
     }
   }, [isOpen, form]);
 
-  const watchedVehicleType = form.watch("vehicleType");
+  const watchedVehicleType = form.watch("vehicle_type");
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -87,7 +89,7 @@ export function DispatchFuelDialog({ isOpen, onOpenChange }: DispatchFuelDialogP
             <ScrollArea className="max-h-[60vh] p-1">
                 <div className="space-y-4 p-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField control={form.control} name="fuelType" render={({ field }) => (
+                        <FormField control={form.control} name="fuel_type" render={({ field }) => (
                             <FormItem>
                             <FormLabel>Tipo de Combustible</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
@@ -121,7 +123,7 @@ export function DispatchFuelDialog({ isOpen, onOpenChange }: DispatchFuelDialogP
                         )} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <FormField control={form.control} name="vehicleType" render={({ field }) => (
+                         <FormField control={form.control} name="vehicle_type" render={({ field }) => (
                             <FormItem>
                             <FormLabel>Tipo de Vehículo</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>

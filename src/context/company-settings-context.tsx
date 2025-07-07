@@ -4,60 +4,42 @@
 import * as React from 'react';
 import type { CompanySettings } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-
-const STORAGE_KEY = 'agronorte-company-settings';
-
-const defaultSettings: CompanySettings = {
-  logoUrl: '', 
-  loginBackgroundUrl: '', 
-  supportWhatsApp: '',
-};
+import { updateCompanySettingsAction } from '@/app/actions/settings-actions';
 
 interface CompanySettingsContextType {
   settings: CompanySettings;
-  setSettings: (newSettings: Partial<CompanySettings>) => void;
+  setSettings: (formData: FormData) => Promise<void>;
   isSettingsLoading: boolean;
 }
 
 const CompanySettingsContext = React.createContext<CompanySettingsContextType | undefined>(undefined);
 
-export function CompanySettingsProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettingsState] = React.useState<CompanySettings>(defaultSettings);
-  const [isSettingsLoading, setLoading] = React.useState(true);
+export function CompanySettingsProvider({ children, initialSettings }: { children: React.ReactNode, initialSettings: CompanySettings }) {
+  const [settings, setSettingsState] = React.useState<CompanySettings>(initialSettings);
+  const [isSettingsLoading, setLoading] = React.useState(false);
   const { toast } = useToast();
 
-  React.useEffect(() => {
-    try {
-      const storedSettings = localStorage.getItem(STORAGE_KEY);
-      if (storedSettings) {
-        setSettingsState(JSON.parse(storedSettings));
-      }
-    } catch (error) {
-      console.error("Failed to load company settings from localStorage", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const setSettings = async (formData: FormData) => {
+    setLoading(true);
+    const result = await updateCompanySettingsAction(formData);
+    setLoading(false);
 
-  const setSettings = (newSettings: Partial<CompanySettings>) => {
-    setSettingsState(prevState => {
-      const updatedSettings = { ...prevState, ...newSettings };
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedSettings));
-        toast({
-          title: 'Configuración Guardada',
-          description: 'La personalización de la empresa ha sido actualizada.',
-        });
-      } catch (error) {
-        console.error("Failed to save company settings to localStorage", error);
-        toast({
-          title: 'Error al Guardar',
-          description: 'No se pudo guardar la configuración.',
-          variant: 'destructive',
-        });
-      }
-      return updatedSettings;
-    });
+    if (result.success) {
+      setSettingsState(prev => ({
+        ...prev,
+        support_whats_app: formData.get('support_whats_app') as string,
+      }));
+      toast({
+        title: 'Configuración Guardada',
+        description: 'La personalización de la empresa ha sido actualizada.',
+      });
+    } else {
+      toast({
+        title: 'Error al Guardar',
+        description: result.message || 'No se pudo guardar la configuración.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const value = { settings, setSettings, isSettingsLoading };

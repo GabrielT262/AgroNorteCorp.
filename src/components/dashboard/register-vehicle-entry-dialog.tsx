@@ -5,26 +5,26 @@ import * as React from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { registerVehicleEntryAction, findVehicleByEmployeeNameAction } from '@/app/actions/security-actions';
-import type { UserArea, RegisteredVehicle } from '@/lib/types';
+import { registerVehicleEntryAction, findVehicleByEmployeeIdAction } from '@/app/actions/security-actions';
+import type { UserArea, ManagedUser } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { getUsers } from '@/lib/db';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, X, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 const userAreas: UserArea[] = ['Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG', 'Administrador'];
 
 const formSchema = z.object({
-  employeeName: z.string().min(3, 'El nombre debe tener al menos 3 caracteres.'),
-  employeeArea: z.enum(userAreas, { required_error: 'Debe seleccionar un área.' }),
-  vehicleType: z.string().min(3, 'El tipo de vehículo es requerido.'),
-  vehicleModel: z.string().min(3, 'El modelo es requerido.'),
-  vehiclePlate: z.string().min(5, 'La placa es requerida.'),
+  employee_id: z.string({ required_error: 'Debe seleccionar un empleado.' }),
+  employee_area: z.enum(userAreas, { required_error: 'Debe seleccionar un área.' }),
+  vehicle_type: z.string().min(3, 'El tipo de vehículo es requerido.'),
+  vehicle_model: z.string().min(3, 'El modelo es requerido.'),
+  vehicle_plate: z.string().min(5, 'La placa es requerida.'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -36,52 +36,42 @@ interface RegisterVehicleEntryDialogProps {
 
 export function RegisterVehicleEntryDialog({ isOpen, onOpenChange }: RegisterVehicleEntryDialogProps) {
   const { toast } = useToast();
-  const [photo, setPhoto] = React.useState<File | null>(null);
   const [isSubmitting, startSubmitTransition] = React.useTransition();
+  const [employees, setEmployees] = React.useState<ManagedUser[]>([]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
   });
 
   React.useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
       form.reset();
-      setPhoto(null);
+      getUsers().then(setEmployees);
     }
   }, [isOpen, form]);
   
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setPhoto(e.target.files[0]);
+  const handleEmployeeChange = async (employeeId: string) => {
+    if (!employeeId) return;
+    
+    const selectedEmployee = employees.find(e => e.id === employeeId);
+    if (selectedEmployee) {
+        form.setValue('employee_area', selectedEmployee.area);
     }
-  };
-
-  const removePhoto = () => {
-    setPhoto(null);
-  }
-
-  const handleNameBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
-    const name = e.target.value;
-    if (!name) return;
-
-    const existingVehicle = await findVehicleByEmployeeNameAction(name);
+    
+    const existingVehicle = await findVehicleByEmployeeIdAction(employeeId);
     if (existingVehicle) {
-      form.setValue('employeeArea', existingVehicle.employeeArea);
-      form.setValue('vehicleType', existingVehicle.vehicleType);
-      form.setValue('vehicleModel', existingVehicle.vehicleModel);
-      form.setValue('vehiclePlate', existingVehicle.vehiclePlate);
-      toast({ title: 'Empleado Encontrado', description: `Se autocompletaron los datos para ${existingVehicle.employeeName}.`});
+      form.setValue('vehicle_type', existingVehicle.vehicle_type);
+      form.setValue('vehicle_model', existingVehicle.vehicle_model);
+      form.setValue('vehicle_plate', existingVehicle.vehicle_plate);
+      toast({ title: 'Vehículo Encontrado', description: `Se autocompletaron los datos para el vehículo de este empleado.`});
     }
   };
 
   const onSubmit = (data: FormValues) => {
-    // In a real app, upload photo and get URL
-    const photoUrl: string | null = null;
-
     startSubmitTransition(async () => {
-        const result = await registerVehicleEntryAction(data, photoUrl);
+        const result = await registerVehicleEntryAction(data);
         if (result.success) {
-            toast({ title: "Ingreso Registrado", description: `El ingreso vehicular de ${data.employeeName} ha sido registrado.` });
+            toast({ title: "Ingreso Registrado", description: `El ingreso vehicular ha sido registrado.` });
             onOpenChange(false);
         } else {
             toast({ title: "Error", description: result.message || "No se pudo registrar el ingreso.", variant: "destructive" });
@@ -103,19 +93,22 @@ export function RegisterVehicleEntryDialog({ isOpen, onOpenChange }: RegisterVeh
             <div className="space-y-4 py-2">
                 <FormField
                     control={form.control}
-                    name="employeeName"
+                    name="employee_id"
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Nombre del Empleado</FormLabel>
-                        <FormControl>
-                            <Input placeholder="Buscar o registrar nombre..." {...field} onBlur={handleNameBlur} />
-                        </FormControl>
+                        <Select onValueChange={(value) => { field.onChange(value); handleEmployeeChange(value); }} value={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar empleado..." /></SelectTrigger></FormControl>
+                            <SelectContent>
+                                {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name} {e.last_name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
                         <FormMessage />
                         </FormItem>
                     )}
                 />
                 <div className="grid grid-cols-2 gap-4">
-                    <FormField control={form.control} name="employeeArea" render={({ field }) => (
+                    <FormField control={form.control} name="employee_area" render={({ field }) => (
                         <FormItem>
                         <FormLabel>Área</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
@@ -124,7 +117,7 @@ export function RegisterVehicleEntryDialog({ isOpen, onOpenChange }: RegisterVeh
                         </Select><FormMessage />
                         </FormItem>
                     )} />
-                    <FormField control={form.control} name="vehiclePlate" render={({ field }) => (
+                    <FormField control={form.control} name="vehicle_plate" render={({ field }) => (
                         <FormItem>
                         <FormLabel>Placa</FormLabel>
                         <FormControl><Input placeholder="Ej: ABC-123" {...field} /></FormControl><FormMessage />
@@ -132,31 +125,18 @@ export function RegisterVehicleEntryDialog({ isOpen, onOpenChange }: RegisterVeh
                     )} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                    <FormField control={form.control} name="vehicleType" render={({ field }) => (
+                    <FormField control={form.control} name="vehicle_type" render={({ field }) => (
                         <FormItem>
                         <FormLabel>Tipo de Vehículo</FormLabel>
                         <FormControl><Input placeholder="Ej: Auto, Moto, Camioneta" {...field} /></FormControl><FormMessage />
                         </FormItem>
                     )} />
-                     <FormField control={form.control} name="vehicleModel" render={({ field }) => (
+                     <FormField control={form.control} name="vehicle_model" render={({ field }) => (
                         <FormItem>
                         <FormLabel>Marca y Modelo</FormLabel>
                         <FormControl><Input placeholder="Ej: Toyota Hilux" {...field} /></FormControl><FormMessage />
                         </FormItem>
                     )} />
-                </div>
-                <div className="space-y-2">
-                    <FormLabel>Foto del Vehículo (Opcional)</FormLabel>
-                    {!photo ? (
-                        <Button asChild variant="outline" size="sm">
-                            <Label className="cursor-pointer"><Upload className="mr-2 h-4 w-4" />Subir Foto <Input type="file" className="sr-only" accept="image/*" onChange={handlePhotoChange} /></Label>
-                        </Button>
-                    ) : (
-                        <div className="relative w-fit">
-                            <img src={URL.createObjectURL(photo)} alt="preview" className="h-24 w-auto rounded-md object-cover"/>
-                            <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full" onClick={removePhoto}><X className="h-4 w-4" /></Button>
-                        </div>
-                    )}
                 </div>
             </div>
             <DialogFooter className="pt-6">

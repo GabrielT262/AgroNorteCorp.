@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -7,21 +8,27 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useToast } from '@/hooks/use-toast';
 import { createGalleryPostAction } from '@/app/actions/gallery-actions';
-import type { GalleryPost } from '@/lib/types';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, X, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
+
+const MAX_IMAGE_SIZE_MB = 1;
+const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
 const formSchema = z.object({
   title: z.string().min(5, 'El título debe tener al menos 5 caracteres.'),
   description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres.'),
-  aiHint: z.string().optional(),
+  ai_hint: z.string().optional(),
+  images: z.any()
+    .refine((files) => files && files.length > 0, 'Debes subir al menos una imagen.')
+    .refine((files) => !files || files.length === 0 || Array.from(files).every((file: any) => file.size <= MAX_IMAGE_SIZE_BYTES), {
+        message: `Cada imagen no debe superar ${MAX_IMAGE_SIZE_MB} MB.`,
+    }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -33,7 +40,6 @@ interface CreateGalleryPostDialogProps {
 
 export function CreateGalleryPostDialog({ isOpen, onOpenChange }: CreateGalleryPostDialogProps) {
   const { toast } = useToast();
-  const [photos, setPhotos] = React.useState<File[]>([]);
   const [isSubmitting, startSubmitTransition] = React.useTransition();
 
   const form = useForm<FormValues>({
@@ -43,43 +49,23 @@ export function CreateGalleryPostDialog({ isOpen, onOpenChange }: CreateGalleryP
   React.useEffect(() => {
     if (!isOpen) {
       form.reset();
-      setPhotos([]);
     }
   }, [isOpen, form]);
-  
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newPhotos = Array.from(e.target.files);
-      if (photos.length + newPhotos.length > 5) {
-        toast({ title: "Límite de fotos", description: "Puedes subir un máximo de 5 fotos.", variant: "destructive" });
-        return;
-      }
-      setPhotos(prev => [...prev, ...newPhotos]);
-    }
-  };
-
-  const removePhoto = (index: number) => {
-    setPhotos(prev => prev.filter((_, i) => i !== index));
-  }
 
   const onSubmit = (data: FormValues) => {
-    if (photos.length === 0) {
-        toast({ title: "Fotos requeridas", description: "Debes subir al menos una foto para la publicación.", variant: "destructive" });
-        return;
+    const formData = new FormData();
+    formData.append('title', data.title);
+    formData.append('description', data.description);
+    if (data.ai_hint) formData.append('ai_hint', data.ai_hint);
+    
+    if (data.images && data.images.length > 0) {
+      for (let i = 0; i < data.images.length; i++) {
+        formData.append('images', data.images[i]);
+      }
     }
-
-    // In a real app, file upload would happen here, returning URLs.
-    // For the prototype, we'll pass empty arrays.
-    const photoUrls: string[] = []; 
-
-    const postData: Omit<GalleryPost, 'id' | 'date' | 'authorName' | 'authorArea' | 'status' | 'images'> = {
-        title: data.title,
-        description: data.description,
-        aiHint: data.aiHint,
-    };
     
     startSubmitTransition(async () => {
-        const result = await createGalleryPostAction(postData, photoUrls);
+        const result = await createGalleryPostAction(formData);
         if (result.success) {
             toast({ title: "Publicación Enviada", description: "Tu logro ha sido enviado a aprobación." });
             onOpenChange(false);
@@ -122,25 +108,28 @@ export function CreateGalleryPostDialog({ isOpen, onOpenChange }: CreateGalleryP
                             </FormItem>
                         )}
                     />
-
-                    <div className="space-y-2">
-                        <FormLabel>Fotos (Requerido, máx. 5)</FormLabel>
-                        <Button asChild variant="outline" size="sm">
-                            <Label className="cursor-pointer"><Upload className="mr-2 h-4 w-4" />Subir Fotos <Input type="file" className="sr-only" accept="image/*" multiple onChange={handlePhotoChange} disabled={photos.length >= 5} /></Label>
-                        </Button>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                            {photos.map((photo, index) => (
-                                <div key={index} className="relative">
-                                    <img src={URL.createObjectURL(photo)} alt="preview" className="h-20 w-20 rounded-md object-cover"/>
-                                    <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full" onClick={() => removePhoto(index)}><X className="h-4 w-4" /></Button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
+                     <FormField
+                        control={form.control}
+                        name="images"
+                        render={({ field: { onChange, value, ...rest } }) => (
+                            <FormItem>
+                                <FormLabel>Imágenes del Logro</FormLabel>
+                                <FormControl>
+                                    <Input
+                                        type="file"
+                                        multiple
+                                        accept="image/*"
+                                        onChange={(e) => onChange(e.target.files)}
+                                        {...rest}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
                     <FormField
                         control={form.control}
-                        name="aiHint"
+                        name="ai_hint"
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Pista para IA (Opcional)</FormLabel>

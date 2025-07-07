@@ -25,7 +25,7 @@ interface SupportDialogProps {
 export function SupportDialog({ isOpen, onOpenChange }: SupportDialogProps) {
   const { settings } = useCompanySettings();
 
-  const adminPhoneNumber = settings.supportWhatsApp || "+51987654321"; // Use setting or fallback
+  const adminPhoneNumber = settings.support_whats_app || "+51987654321"; // Use setting or fallback
   const whatsappMessage = "Hola, necesito soporte con el sistema AgroNorte Corp.";
   const whatsappLink = `https://wa.me/${adminPhoneNumber.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMessage)}`;
 

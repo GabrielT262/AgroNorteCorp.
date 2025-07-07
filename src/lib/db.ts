@@ -1,289 +1,217 @@
-
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import { eq, and, sql, desc, gte, lte, or } from 'drizzle-orm';
-import * as schema from './schema';
-import type { InventoryItem, RecentOrder, ManagedUser, SecurityReport, GalleryPost, Communication, FuelHistoryEntry, UserArea, RegisteredVehicle, InventoryHistoryEntry } from './types';
-
-let connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  // throw new Error('DATABASE_URL environment variable is not set. Please add it to your .env file.');
-  console.warn('DATABASE_URL environment variable is not set. Please add it to your .env file. Application will run with limited functionality.');
-}
-
-// When connecting to a Supabase database with connection pooling (PgBouncer),
-// sslmode=require is necessary. This error often occurs in serverless environments like Vercel.
-if (connectionString && !/sslmode=/.test(connectionString)) {
-    const separator = connectionString.includes('?') ? '&' : '?';
-    connectionString = `${connectionString}${separator}sslmode=require`;
-}
+import { supabase } from './supabase';
+import type { InventoryItem, RecentOrder, ManagedUser, SecurityReport, GalleryPost, Communication, FuelHistoryEntry, User, RegisteredVehicle, InventoryHistoryEntry, CompanySettings, Notification, ExpiringProduct, FuelType } from './types';
+import { differenceInDays, parseISO } from 'date-fns';
 
 
-// For query purposes
-const queryClient = postgres(connectionString || '');
-export const db = drizzle(queryClient, { schema });
+// ==================
+// This file uses the Supabase client to query the database.
+// All functions are async to maintain the same signature as a real DB query.
+// ==================
+
 
 // INVENTORY
 export async function getInventoryItems(): Promise<InventoryItem[]> {
-  try {
-    const items = await db.query.inventoryItems.findMany({
-       orderBy: [desc(schema.inventoryItems.name)],
-    });
-    return items.map(item => ({
-      ...item,
-      images: Array.isArray(item.images) ? item.images : [],
-      expiryDate: item.expiryDate ? item.expiryDate.toISOString().split('T')[0] : undefined,
-    })) as InventoryItem[];
-  } catch (error: any) {
-    if (error.code === 'ENOTFOUND' || error.message?.includes('failed to resolve')) {
-      console.error('--------------------------------------------------');
-      console.error('DATABASE CONNECTION ERROR: Hostname not found.');
-      console.error('Please check the DATABASE_URL in your .env file.');
-      console.error('It seems the Supabase server address is incorrect or unreachable.');
-      console.error('--------------------------------------------------');
-    } else {
-      console.error('Error fetching inventory items:', error);
-    }
+  const { data, error } = await supabase.from('inventory_items').select('*').order('name');
+  if (error) {
+    console.error('Error fetching inventory items:', error);
     return [];
   }
+  return data || [];
 }
 
 export async function getInventoryHistory(): Promise<InventoryHistoryEntry[]> {
-    try {
-        const items = await db.query.inventoryHistory.findMany({
-            orderBy: [desc(schema.inventoryHistory.date)],
-        });
-        return items.map(item => ({
-            ...item,
-            date: item.date.toISOString(),
-        })) as InventoryHistoryEntry[];
-    } catch (error) {
-        console.error(`Error fetching from inventoryHistory:`, error);
-        return [];
+    const { data, error } = await supabase
+        .from('inventory_history')
+        .select('*, users(name, last_name)')
+        .order('date', { ascending: false });
+    if (error) {
+      console.error('Error fetching inventory history:', error);
+      return [];
     }
+    return data || [];
 }
 
 
 // ORDERS
 export async function getOrders(): Promise<RecentOrder[]> {
-    try {
-        const orders = await db.query.orders.findMany({
-            with: {
-                items: true,
-            },
-            orderBy: [desc(schema.orders.date)],
-        });
-        return orders.map(order => ({
-            ...order,
-            date: order.date.toISOString(),
-        })) as RecentOrder[];
-    } catch (error) {
-        console.error("Error fetching orders:", error);
-        return [];
+    const { data, error } = await supabase
+        .from('orders')
+        .select('*, users(name, last_name)')
+        .order('date', { ascending: false });
+    if (error) {
+      console.error('Error fetching orders:', error);
+      return [];
     }
+    return data || [];
 }
 
 // USERS
 export async function getUsers(): Promise<ManagedUser[]> {
-    try {
-        const users = await db.query.users.findMany({
-            orderBy: [desc(schema.users.name)],
-        });
-        // Selectively return fields, excluding password
-        return users.map(user => ({
-            id: user.id,
-            username: user.username,
-            name: user.name,
-            lastName: user.lastName,
-            email: user.email,
-            role: user.role,
-            area: user.area,
-            signatureUrl: user.signatureUrl || undefined,
-        }));
-    } catch (error) {
-        console.error(`Error fetching from users:`, error);
-        return [];
+    const { data, error } = await supabase.from('users').select('id, username, name, last_name, email, role, area, status, avatar_url, signature_url').order('name');
+    if (error) {
+      console.error('Error fetching users:', error);
+      return [];
     }
+    return data || [];
 }
 
 // COMMUNICATIONS
 export async function getCommunications(): Promise<Communication[]> {
-    try {
-        const items = await db.query.communications.findMany({
-            orderBy: [desc(schema.communications.date)],
-        });
-        return items.map(item => ({
-            ...item,
-            images: Array.isArray(item.images) ? item.images : [],
-            date: item.date.toISOString(),
-        })) as Communication[];
-    } catch (error) {
-        console.error(`Error fetching from communications:`, error);
-        return [];
+    const { data, error } = await supabase
+        .from('communications')
+        .select('*, users(name, last_name)')
+        .order('date', { ascending: false });
+    if (error) {
+      console.error('Error fetching communications:', error);
+      return [];
     }
+    return data || [];
 }
 
 // GALLERY
 export async function getGalleryPosts(): Promise<GalleryPost[]> {
-    try {
-        const items = await db.query.galleryPosts.findMany({
-            orderBy: [desc(schema.galleryPosts.date)],
-        });
-        return items.map(item => ({
-            ...item,
-            images: Array.isArray(item.images) ? item.images : [],
-            date: item.date.toISOString(),
-        })) as GalleryPost[];
-    } catch (error) {
-        console.error(`Error fetching from galleryPosts:`, error);
-        return [];
+    const { data, error } = await supabase
+        .from('gallery_posts')
+        .select('*, users(name, last_name)')
+        .order('date', { ascending: false });
+    if (error) {
+      console.error('Error fetching gallery posts:', error);
+      return [];
     }
+    return data || [];
 }
 
 // SECURITY
 export async function getSecurityReports(): Promise<SecurityReport[]> {
-     try {
-        const items = await db.query.securityReports.findMany({
-            orderBy: [desc(schema.securityReports.date)],
-        });
-        return items.map(item => ({
-            ...item,
-            photos: Array.isArray(item.photos) ? item.photos : [],
-            date: item.date.toISOString(),
-            meta: item.meta ? item.meta : undefined,
-        })) as SecurityReport[];
-    } catch (error) {
-        console.error(`Error fetching from securityReports:`, error);
-        return [];
+    const { data, error } = await supabase
+        .from('security_reports')
+        .select('*, users(name, last_name)')
+        .order('date', { ascending: false });
+    if (error) {
+      console.error('Error fetching security reports:', error);
+      return [];
     }
+    return data || [];
 }
 
 export async function getRegisteredVehicles(): Promise<RegisteredVehicle[]> {
-    try {
-        const items = await db.query.registeredVehicles.findMany();
-        return items as RegisteredVehicle[];
-    } catch (error) {
-        console.error(`Error fetching from registeredVehicles:`, error);
-        return [];
+    const { data, error } = await supabase
+        .from('registered_vehicles')
+        .select('*, users(name, last_name)');
+    if (error) {
+      console.error('Error fetching registered vehicles:', error);
+      return [];
     }
+    return data || [];
 }
 
 
 // FUEL
 export async function getFuelHistory(): Promise<FuelHistoryEntry[]> {
-    try {
-        const items = await db.query.fuelHistory.findMany({
-            orderBy: [desc(schema.fuelHistory.date)],
-        });
-        return items.map(item => ({
-            ...item,
-            quantity: Number(item.quantity),
-            horometro: item.horometro ? Number(item.horometro) : undefined,
-            kilometraje: item.kilometraje ? Number(item.kilometraje) : undefined,
-            date: item.date.toISOString(),
-        }));
-    } catch (error) {
-        console.error(`Error fetching from fuelHistory:`, error);
-        return [];
+    const { data, error } = await supabase
+        .from('fuel_history')
+        .select('*, users(name, last_name)')
+        .order('date', { ascending: false });
+    if (error) {
+      console.error('Error fetching fuel history:', error);
+      return [];
     }
+    return data || [];
 }
 
-export async function getFuelLevels() {
-    try {
-        const result = await db
-            .select({
-                fuelType: schema.fuelHistory.fuelType,
-                total: sql<number>`sum(case when type = 'Abastecimiento' then quantity::numeric else -quantity::numeric end)`.mapWith(Number),
-            })
-            .from(schema.fuelHistory)
-            .groupBy(schema.fuelHistory.fuelType);
-
-        const levels = {
-            Gasolina: 0,
-            Petróleo: 0,
-        };
-
-        for (const row of result) {
-            if (row.fuelType === 'Gasolina' || row.fuelType === 'Petróleo') {
-                levels[row.fuelType] = row.total;
-            }
-        }
-        return levels;
-    } catch (error) {
+export async function getFuelLevels(): Promise<{ [key in FuelType]: number }> {
+    const { data, error } = await supabase.from('fuel_levels').select('*');
+    if (error) {
         console.error('Error fetching fuel levels:', error);
         return { Gasolina: 0, Petróleo: 0 };
     }
+    
+    const levels = data.reduce((acc, curr) => {
+        acc[curr.fuel_type as FuelType] = curr.level;
+        return acc;
+    }, {} as { [key in FuelType]: number });
+
+    return levels;
 }
 
 // DASHBOARD
-export async function getDashboardData(currentUser: { area: UserArea, role: string }) {
-    try {
-        const thirtyDaysFromNow = new Date();
-        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-        const today = new Date();
+export async function getDashboardData(currentUser: { area: string, role: string }) {
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+    const today = new Date();
 
-        const recentOrdersPromise = db.query.orders.findMany({
-            orderBy: [desc(schema.orders.date)],
-            limit: 5,
-            with: { items: { columns: { id: true } } }
-        });
+    const [ordersResult, inventoryResult, fuelLevelsResult] = await Promise.all([
+        supabase.from('orders').select('*, users(name, last_name)').order('date', { ascending: false }).limit(5),
+        supabase.from('inventory_items').select('name, batches'),
+        supabase.from('fuel_levels').select('*')
+    ]);
+    
+    if (ordersResult.error) console.error("Dashboard Orders Error:", ordersResult.error);
+    if (inventoryResult.error) console.error("Dashboard Inventory Error:", inventoryResult.error);
+    if (fuelLevelsResult.error) console.error("Dashboard Fuel Error:", fuelLevelsResult.error);
 
-        const expiringProductsPromise = db.query.inventoryItems.findMany({
-            where: and(
-                gte(schema.inventoryItems.stock, 1),
-                schema.inventoryItems.expiryDate,
-                lte(schema.inventoryItems.expiryDate, thirtyDaysFromNow.toISOString().split('T')[0]),
-                gte(schema.inventoryItems.expiryDate, today.toISOString().split('T')[0])
-            ),
-            orderBy: [schema.inventoryItems.expiryDate],
-            limit: 5
-        });
-
-        const inventoryStatsPromise = db.select({
-            totalItems: sql<number>`count(*)`.mapWith(Number),
-        }).from(schema.inventoryItems);
-
-        const pendingOrdersCountPromise = db.select({
-            count: sql<number>`count(*)`.mapWith(Number)
-        }).from(schema.orders).where(eq(schema.orders.status, 'Pendiente'));
-
-        const fuelLevelsPromise = getFuelLevels();
-
-        const [recentOrdersResult, expiringProductsResult, inventoryStats, pendingOrders, fuelLevels] = await Promise.all([
-            recentOrdersPromise,
-            expiringProductsPromise,
-            inventoryStatsPromise,
-            pendingOrdersCountPromise,
-            fuelLevelsPromise,
-        ]);
-        
-        const recentOrders = recentOrdersResult.map(o => ({...o, date: o.date.toISOString()}));
-        const expiringProducts = expiringProductsResult.map(p => ({...p, expiryDate: p.expiryDate ? p.expiryDate.toISOString().split('T')[0] : undefined}));
-
+    const allRecentOrders = ordersResult.data || [];
+    const inventoryItems = inventoryResult.data || [];
+    
+    const expiringLotes: ExpiringProduct[] = inventoryItems.flatMap(item => 
+        (item.batches || [])
+            .filter((batch: any) => batch.expiry_date && batch.stock > 0)
+            .map((batch: any) => ({ ...batch, item }))
+    )
+    .filter((batchInfo: any) => {
+        const expiry = parseISO(batchInfo.expiry_date!);
+        return expiry <= thirtyDaysFromNow && expiry >= today;
+    })
+    .sort((a: any, b: any) => new Date(a.expiry_date!).getTime() - new Date(b.expiry_date!).getTime())
+    .map((batchInfo: any) => {
+        const daysLeft = differenceInDays(parseISO(batchInfo.expiry_date!), today);
         return {
-            recentOrders: recentOrders as RecentOrder[],
-            expiringProducts,
-            totalInventoryItems: inventoryStats[0]?.totalItems || 0,
-            pendingOrdersCount: pendingOrders[0]?.count || 0,
-            fuelLevels,
+            name: batchInfo.item.name,
+            stock: batchInfo.stock,
+            expires_in: daysLeft <= 0 ? 'Vencido' : `${daysLeft} días`,
+            lote_id: batchInfo.id,
         };
-    } catch (error: any) {
-        if (error.code === 'ENOTFOUND' || error.message?.includes('failed to resolve')) {
-          console.error('--------------------------------------------------');
-          console.error('DATABASE CONNECTION ERROR: Hostname not found.');
-          console.error('Please check the DATABASE_URL in your .env file.');
-          console.error('It seems the Supabase server address is incorrect or unreachable.');
-          console.error('--------------------------------------------------');
-        } else {
-          console.error('Error fetching dashboard data:', error);
-        }
-        return {
-          recentOrders: [],
-          expiringProducts: [],
-          totalInventoryItems: 0,
-          pendingOrdersCount: 0,
-          fuelLevels: { Gasolina: 0, Petróleo: 0 },
-        };
+    });
+
+    const { count: pendingOrdersCount } = await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'Pendiente');
+    const { count: totalInventoryItems } = await supabase.from('inventory_items').select('*', { count: 'exact', head: true });
+    
+    const fuelLevels = (fuelLevelsResult.data || []).reduce((acc, curr) => {
+        acc[curr.fuel_type as FuelType] = curr.level;
+        return acc;
+    }, { Gasolina: 0, Petróleo: 0 } as { [key in FuelType]: number });
+
+    return {
+        recentOrders: allRecentOrders,
+        expiringProducts: expiringLotes.slice(0, 5),
+        totalInventoryItems: totalInventoryItems || 0,
+        pendingOrdersCount: pendingOrdersCount || 0,
+        fuelLevels: fuelLevels,
+    };
+}
+
+
+// NOTIFICATIONS
+export async function getNotifications(recipientId: string): Promise<Notification[]> {
+    const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .or(`recipient_id.eq.${recipientId},recipient_id.eq.Administrador`)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching notifications:", error);
+        return [];
     }
+    return data || [];
+}
+
+// COMPANY SETTINGS
+export async function getCompanySettings(): Promise<CompanySettings> {
+    const { data, error } = await supabase.from('company_settings').select('*').eq('id', 1).single();
+    if (error || !data) {
+        console.error('Could not fetch company settings, returning default.', error);
+        return { id: 1, support_whats_app: '+123456789', logo_url: null, login_bg_url: null };
+    }
+    return data;
 }

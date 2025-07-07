@@ -10,7 +10,7 @@ interface OrderContextType {
   addItem: (item: InventoryItem, quantity: number) => void;
   removeItem: (itemId: string) => void;
   updateItemQuantity: (itemId: string, quantity: number) => void;
-  updateItemUsageDescription: (itemId: string, description: string) => void;
+  updateItemDetails: (itemId: string, details: Partial<Omit<OrderItem, 'item_id' | 'name' | 'quantity' | 'unit' | 'category'>>) => void;
   clearOrder: () => void;
   isSheetOpen: boolean;
   setSheetOpen: (open: boolean) => void;
@@ -26,77 +26,62 @@ export const OrderProvider = ({ children }: { children: React.ReactNode }) => {
   const addItem = (item: InventoryItem, quantity: number) => {
     if (quantity <= 0) return;
 
-    setOrderItems((prevItems) => {
-      const existingItem = prevItems.find((i) => i.itemId === item.id);
-      const newQuantity = (existingItem?.quantity || 0) + quantity;
+    const totalStock = item.batches.reduce((sum, batch) => sum + batch.stock, 0);
+    const existingItem = orderItems.find((i) => i.item_id === item.id);
+    const newQuantity = (existingItem?.quantity || 0) + quantity;
 
-      if (newQuantity > item.stock) {
-        toast({
-          title: "Stock Insuficiente",
-          description: `No puedes solicitar más de ${item.stock} ${item.unit} de ${item.name}.`,
-          variant: "destructive",
-        });
-        return prevItems;
-      }
-      
+    if (newQuantity > totalStock) {
       toast({
-        title: "Artículo Añadido",
-        description: `${quantity} x ${item.name} añadido(s) a tu solicitud.`,
+        title: "Stock Insuficiente",
+        description: `No puedes solicitar más de ${totalStock} ${item.unit} de ${item.name}.`,
+        variant: "destructive",
       });
+      return;
+    }
 
-      if (existingItem) {
-        return prevItems.map((i) =>
-          i.itemId === item.id ? { ...i, quantity: newQuantity } : i
-        );
-      }
-      return [...prevItems, { 
-        itemId: item.id, 
-        name: item.name, 
-        quantity, 
-        unit: item.unit, 
-        stock: item.stock, 
-        category: item.category,
-        usageDescription: '',
-      }];
+    if (existingItem) {
+        setOrderItems(prevItems => prevItems.map(i => i.item_id === item.id ? { ...i, quantity: newQuantity } : i));
+    } else {
+        setOrderItems(prevItems => [...prevItems, { 
+            item_id: item.id, 
+            name: item.name, 
+            quantity, 
+            unit: item.unit, 
+            category: item.category,
+            area: undefined,
+            cost_center: '',
+            cultivo: undefined,
+            observations: '',
+        }]);
+    }
+
+    toast({
+      title: "Artículo Añadido",
+      description: `${quantity} x ${item.name} añadido(s) a tu solicitud.`,
     });
   };
   
   const updateItemQuantity = (itemId: string, quantity: number) => {
     setOrderItems((prevItems) => {
-       const itemToUpdate = prevItems.find((i) => i.itemId === itemId);
-       if (!itemToUpdate) return prevItems;
-
-       if (quantity > itemToUpdate.stock) {
-         toast({
-          title: "Stock Insuficiente",
-          description: `No puedes solicitar más de ${itemToUpdate.stock} ${itemToUpdate.unit}.`,
-          variant: "destructive",
-         });
-         return prevItems.map((i) =>
-            i.itemId === itemId ? { ...i, quantity: itemToUpdate.stock } : i
-         );
-       }
-
-       if (quantity <= 0) {
-         return prevItems.filter((i) => i.itemId !== itemId);
-       }
-
-       return prevItems.map((i) =>
-         i.itemId === itemId ? { ...i, quantity } : i
-       );
+        if (quantity <= 0) {
+            return prevItems.filter((i) => i.item_id !== itemId);
+        }
+        return prevItems.map((i) =>
+            i.item_id === itemId ? { ...i, quantity } : i
+        );
     });
   };
 
-  const updateItemUsageDescription = (itemId: string, description: string) => {
+  const updateItemDetails = (itemId: string, details: Partial<Omit<OrderItem, 'item_id' | 'name' | 'quantity' | 'unit' | 'category'>>) => {
     setOrderItems((prevItems) =>
       prevItems.map((item) =>
-        item.itemId === itemId ? { ...item, usageDescription: description } : item
+        item.item_id === itemId ? { ...item, ...details } : item
       )
     );
   };
 
   const removeItem = (itemId: string) => {
-    setOrderItems((prevItems) => prevItems.filter((i) => i.itemId !== itemId));
+    setOrderItems((prevItems) => prevItems.filter((i) => i.item_id !== itemId));
   };
   
   const clearOrder = () => {
@@ -104,7 +89,7 @@ export const OrderProvider = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <OrderContext.Provider value={{ orderItems, addItem, removeItem, updateItemQuantity, updateItemUsageDescription, clearOrder, isSheetOpen, setSheetOpen }}>
+    <OrderContext.Provider value={{ orderItems, addItem, removeItem, updateItemQuantity, updateItemDetails, clearOrder, isSheetOpen, setSheetOpen }}>
       {children}
     </OrderContext.Provider>
   );

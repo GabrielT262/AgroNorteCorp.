@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -30,10 +31,13 @@ export function ProductCard({ item, canManage, onViewDetails, onEdit, onDelete }
   const [quantity, setQuantity] = React.useState(1);
   const isDecimalAllowed = item.category === 'Agroquímicos' || item.category === 'Fertilizantes';
 
+  const totalStock = item.batches.reduce((sum, batch) => sum + batch.stock, 0);
+  const status = totalStock <= 0 ? 'Agotado' : totalStock <= 10 ? 'Poco Stock' : 'En Stock';
+
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     if (value === '') {
-      setQuantity(0); // Treat empty string as 0 for validation, but show empty in input
+      setQuantity(0);
       return;
     }
     const numValue = Number(value);
@@ -83,11 +87,11 @@ export function ProductCard({ item, canManage, onViewDetails, onEdit, onDelete }
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={onEdit}>
               <Pencil className="mr-2 h-4 w-4" />
-              <span>Editar</span>
+              <span>Ver/Editar Lotes</span>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
               <Trash2 className="mr-2 h-4 w-4" />
-              <span>Borrar</span>
+              <span>Borrar Producto</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -104,17 +108,17 @@ export function ProductCard({ item, canManage, onViewDetails, onEdit, onDelete }
         </button>
       </CardHeader>
       <CardContent className="p-4 pt-0 flex-grow">
-        <Badge variant={statusVariant[item.status]} className="mb-2">{item.status}</Badge>
+        <Badge variant={statusVariant[status]} className="mb-2">{status}</Badge>
         <h3 className="font-semibold text-lg leading-tight">{item.name}</h3>
         <p className="text-sm text-muted-foreground mt-1">{item.area}</p>
         <p className="text-xs text-muted-foreground font-mono mt-1">{item.id}</p>
         <p className="text-sm text-muted-foreground mt-2">
-          Stock: {item.stock} {item.unit}
+          Stock Total: {totalStock} {item.unit}
         </p>
       </CardContent>
       <CardFooter className="p-4 pt-0 flex-col items-start gap-4">
         <div className="flex items-center gap-2 w-full">
-          <Button variant="outline" size="icon" className="h-10 w-10" onClick={decrement} disabled={item.status === 'Agotado'}>
+          <Button variant="outline" size="icon" className="h-10 w-10" onClick={decrement} disabled={status === 'Agotado'}>
             <Minus className="h-4 w-4" />
           </Button>
           <Input 
@@ -125,14 +129,14 @@ export function ProductCard({ item, canManage, onViewDetails, onEdit, onDelete }
             onFocus={handleFocus}
             min="0"
             step={isDecimalAllowed ? "0.01" : "1"}
-            disabled={item.status === 'Agotado'}
+            disabled={status === 'Agotado'}
             placeholder="0"
           />
-          <Button variant="outline" size="icon" className="h-10 w-10" onClick={increment} disabled={item.status === 'Agotado'}>
+          <Button variant="outline" size="icon" className="h-10 w-10" onClick={increment} disabled={status === 'Agotado'}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
-        <Button className="w-full" onClick={handleAddClick} disabled={item.status === 'Agotado' || quantity <= 0}>
+        <Button className="w-full" onClick={handleAddClick} disabled={status === 'Agotado' || quantity <= 0}>
           <ShoppingCart className="mr-2 h-4 w-4" />
           Añadir al Pedido
         </Button>

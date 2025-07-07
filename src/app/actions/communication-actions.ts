@@ -1,21 +1,29 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/db';
-import * as schema from '@/lib/schema';
+import { supabase } from '@/lib/supabase';
 import type { Communication } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 
-export async function createCommunicationAction(data: Omit<Communication, 'id' | 'date' | 'authorName' | 'images'>, images: string[]) {
+export async function createCommunicationAction(data: Omit<Communication, 'id' | 'date' | 'author_id'>) {
     const newCommunicationId = `COM-${uuidv4().slice(0, 8).toUpperCase()}`;
+    
+    // In a real app, you would get the user from the session.
+    const hardcodedUserId = 'usr_gabriel';
+
     try {
-        await db.insert(schema.communications).values({
+        const newCommunication: Pick<Communication, 'title' | 'description' | 'ai_hint' | 'date' | 'author_id'> = {
             ...data,
-            id: newCommunicationId,
-            date: new Date(),
-            authorName: 'Current User', // Placeholder for actual user
-            images,
-        });
+            date: new Date().toISOString(),
+            author_id: hardcodedUserId,
+        };
+
+        const { error } = await supabase
+          .from('communications')
+          .insert({ id: newCommunicationId, ...newCommunication });
+
+        if (error) throw error;
+
         revalidatePath('/dashboard/communications');
         return { success: true, communicationId: newCommunicationId };
     } catch (error) {

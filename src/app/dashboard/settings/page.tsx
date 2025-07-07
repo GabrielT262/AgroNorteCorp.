@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -7,6 +8,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTheme } from '@/context/theme-context';
 import { useToast } from '@/hooks/use-toast';
+import { updateUserProfileAction } from '@/app/actions/user-actions';
+import Image from 'next/image';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -16,7 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Lock, Palette, PenSquare } from 'lucide-react';
+import { User, Lock, Palette, PenSquare, Loader2 } from 'lucide-react';
 
 const passwordFormSchema = z
   .object({
@@ -30,12 +33,18 @@ const passwordFormSchema = z
   });
 
 type PasswordFormValues = z.infer<typeof passwordFormSchema>;
+const MAX_IMAGE_SIZE_BYTES = 1 * 1024 * 1024; // 1MB
 
 export default function SettingsPage() {
   const { setTheme, theme } = useTheme();
   const { toast } = useToast();
-  const [avatarPreview, setAvatarPreview] = React.useState<string | null>('https://placehold.co/100x100.png');
-  const [signaturePreview, setSignaturePreview] = React.useState<string | null>('https://placehold.co/200x80.png?text=Firma');
+  const [isSavingProfile, startSavingProfileTransition] = React.useTransition();
+  const [avatarError, setAvatarError] = React.useState<string | null>(null);
+  const [signatureError, setSignatureError] = React.useState<string | null>(null);
+  
+  // These should come from a real user object from an auth context
+  const currentUser = { id: 'usr_gabriel', name: 'Gabriel T', area: 'Administrador', avatar_url: 'https://placehold.co/100x100.png', signature_url: null };
+  const profileFormRef = React.useRef<HTMLFormElement>(null);
 
   const passwordForm = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordFormSchema),
@@ -52,27 +61,42 @@ export default function SettingsPage() {
     passwordForm.reset();
   };
   
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setPreview: React.Dispatch<React.SetStateAction<string | null>>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreview(reader.result as string);
-        // In a real app, you would save this to the user's profile.
-        // For this prototype, we just update the preview.
-      };
-      reader.readAsDataURL(file);
+  const validateFile = (file: File | null, type: 'avatar' | 'signature'): boolean => {
+    const errorSetter = type === 'avatar' ? setAvatarError : setSignatureError;
+    errorSetter(null);
+    if (!file || file.size === 0) return true;
+
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      errorSetter(`La imagen no debe superar 1 MB.`);
+      return false;
     }
+    return true;
   };
 
-  const handleSaveProfile = () => {
-      // In a real app, you would upload the files and update the user's profile URL from the backend.
-      toast({
-          title: "Perfil Actualizado",
-          description: "Tus cambios han sido guardados (simulado)."
-      });
-  }
+  const handleProfileSave = () => {
+    if (profileFormRef.current) {
+      const formData = new FormData(profileFormRef.current);
+      const avatarFile = formData.get('avatar') as File;
+      const signatureFile = formData.get('signature') as File;
 
+      const isAvatarValid = validateFile(avatarFile, 'avatar');
+      const isSignatureValid = validateFile(signatureFile, 'signature');
+      
+      if (!isAvatarValid || !isSignatureValid) {
+        toast({ title: 'Error de Validación', description: 'Por favor, corrige los errores en los archivos.', variant: 'destructive' });
+        return;
+      }
+      
+      startSavingProfileTransition(async () => {
+        const result = await updateUserProfileAction(currentUser.id, formData);
+        if (result.success) {
+          toast({ title: 'Perfil Actualizado', description: 'Tus cambios han sido guardados.' });
+        } else {
+          toast({ title: 'Error', description: result.message || 'No se pudo actualizar tu perfil.', variant: 'destructive' });
+        }
+      });
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,53 +111,59 @@ export default function SettingsPage() {
         
         <TabsContent value="profile">
           <Card>
+           <form ref={profileFormRef}>
             <CardHeader>
               <CardTitle>Perfil Público</CardTitle>
-              <CardDescription>Esta información será visible para otros usuarios.</CardDescription>
+              <CardDescription>Esta información, junto a tu foto y firma, será visible para otros usuarios.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-               <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
+                <div className="space-y-2">
                     <Label>Foto de Perfil</Label>
                     <div className="flex items-center gap-4">
-                      <Avatar className="h-20 w-20">
-                        <AvatarImage src={avatarPreview || ''} alt="Admin" data-ai-hint="person portrait" />
-                        <AvatarFallback>GT</AvatarFallback>
-                      </Avatar>
-                      <Button asChild variant="outline">
-                          <Label htmlFor="avatar-upload">Cambiar Foto
-                              <Input id="avatar-upload" type="file" className="sr-only" accept="image/*" onChange={(e) => handleFileChange(e, setAvatarPreview)} />
-                          </Label>
-                      </Button>
+                        <Avatar className="h-20 w-20">
+                            <AvatarImage src={currentUser.avatar_url} alt="Admin" data-ai-hint="person portrait" />
+                            <AvatarFallback>GT</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-grow">
+                            <Input name="avatar" type="file" accept="image/*" />
+                             {avatarError && <p className="text-sm font-medium text-destructive mt-2">{avatarError}</p>}
+                        </div>
                     </div>
-                  </div>
-                   <div className="space-y-2">
+                </div>
+
+                <div className="space-y-2">
                     <Label>Firma Digital</Label>
                     <div className="flex items-center gap-4">
-                        <div className="w-40 h-20 bg-muted rounded-md flex items-center justify-center p-1">
-                            {signaturePreview ? <img src={signaturePreview} alt="Firma digital" className="max-w-full max-h-full object-contain" data-ai-hint="signature"/> : <span className="text-xs text-muted-foreground">Vista Previa</span>}
+                        <div className="w-48 h-24 bg-muted rounded-md flex items-center justify-center p-2 relative overflow-hidden">
+                            {currentUser.signature_url ? (
+                                <Image src={currentUser.signature_url} alt="Firma actual" fill className="object-contain" />
+                            ) : (
+                                <span className="text-muted-foreground text-sm text-center">Vista Previa de la Firma</span>
+                            )}
                         </div>
-                      <Button asChild variant="outline">
-                          <Label htmlFor="signature-upload">Actualizar
-                              <Input id="signature-upload" type="file" className="sr-only" accept="image/png, image/jpeg" onChange={(e) => handleFileChange(e, setSignaturePreview)} />
-                          </Label>
-                      </Button>
+                        <div className="flex-grow">
+                            <Input name="signature" type="file" accept="image/*" />
+                            {signatureError && <p className="text-sm font-medium text-destructive mt-2">{signatureError}</p>}
+                        </div>
                     </div>
-                  </div>
-               </div>
+                </div>
 
-              <div className="space-y-2">
-                <Label>Nombre</Label>
-                <Input defaultValue="Gabriel T" disabled />
-              </div>
-              <div className="space-y-2">
-                <Label>Área</Label>
-                <Input defaultValue="Administrador" disabled />
-              </div>
+                <div className="space-y-2">
+                    <Label>Nombre</Label>
+                    <Input defaultValue={currentUser.name} disabled />
+                </div>
+                <div className="space-y-2">
+                    <Label>Área</Label>
+                    <Input defaultValue={currentUser.area} disabled />
+                </div>
             </CardContent>
-            <CardFooter className="border-t pt-6 flex justify-end">
-                <Button onClick={handleSaveProfile}>Guardar Cambios</Button>
+            <CardFooter>
+                <Button type="button" onClick={handleProfileSave} disabled={isSavingProfile}>
+                    {isSavingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Guardar Cambios de Perfil
+                </Button>
             </CardFooter>
+           </form>
           </Card>
         </TabsContent>
         

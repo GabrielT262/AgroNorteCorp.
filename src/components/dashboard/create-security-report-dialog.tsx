@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, X, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
 
 const reportTypes: SecurityReport['type'][] = ['Novedad', 'Incidente', 'Solicitud de Permiso', 'Ingreso de Proveedor'];
@@ -45,7 +45,6 @@ interface CreateSecurityReportDialogProps {
 
 export function CreateSecurityReportDialog({ isOpen, onOpenChange }: CreateSecurityReportDialogProps) {
   const { toast } = useToast();
-  const [photos, setPhotos] = React.useState<File[]>([]);
   const [isSubmitting, startSubmitTransition] = React.useTransition();
 
   const form = useForm<FormValues>({
@@ -57,31 +56,11 @@ export function CreateSecurityReportDialog({ isOpen, onOpenChange }: CreateSecur
   React.useEffect(() => {
     if (!isOpen) {
       form.reset();
-      setPhotos([]);
     }
   }, [isOpen, form]);
-  
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newPhotos = Array.from(e.target.files);
-      if (photos.length + newPhotos.length > 5) {
-        toast({ title: "Límite de fotos", description: "Puedes subir un máximo de 5 fotos.", variant: "destructive" });
-        return;
-      }
-      setPhotos(prev => [...prev, ...newPhotos]);
-    }
-  };
-
-  const removePhoto = (index: number) => {
-    setPhotos(prev => prev.filter((_, i) => i !== index));
-  }
 
   const onSubmit = (data: FormValues) => {
-    // In a real app, file upload would happen here, returning URLs.
-    // For the prototype, we'll pass empty arrays.
-    const photoUrls: string[] = []; 
-
-    const reportData: Omit<SecurityReport, 'id' | 'date' | 'author' | 'photos'> = {
+    const reportData: Omit<SecurityReport, 'id' | 'date' | 'author'> = {
         title: data.title,
         description: data.description,
         type: data.type,
@@ -95,7 +74,7 @@ export function CreateSecurityReportDialog({ isOpen, onOpenChange }: CreateSecur
     }
 
     startSubmitTransition(async () => {
-        const result = await createSecurityReportAction(reportData, photoUrls);
+        const result = await createSecurityReportAction(reportData);
         if (result.success) {
             toast({ title: "Reporte Creado", description: "El reporte de seguridad ha sido guardado." });
             onOpenChange(false);
@@ -163,20 +142,10 @@ export function CreateSecurityReportDialog({ isOpen, onOpenChange }: CreateSecur
                             )}
                         />
                      )}
-
-                    <div className="space-y-2">
-                        <FormLabel>Fotos (Opcional, máx. 5)</FormLabel>
-                        <Button asChild variant="outline" size="sm">
-                            <Label className="cursor-pointer"><Upload className="mr-2 h-4 w-4" />Subir Fotos <Input type="file" className="sr-only" accept="image/*" multiple onChange={handlePhotoChange} disabled={photos.length >= 5} /></Label>
-                        </Button>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                            {photos.map((photo, index) => (
-                                <div key={index} className="relative">
-                                    <img src={URL.createObjectURL(photo)} alt="preview" className="h-20 w-20 rounded-md object-cover"/>
-                                    <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full" onClick={() => removePhoto(index)}><X className="h-4 w-4" /></Button>
-                                </div>
-                            ))}
-                        </div>
+                     <div>
+                        <Label>Adjuntar Fotos (Opcional)</Label>
+                        <Input type="file" multiple disabled className="mt-2" />
+                        <p className="text-xs text-muted-foreground pt-2">La carga de archivos está deshabilitada temporalmente.</p>
                     </div>
                 </div>
             </ScrollArea>

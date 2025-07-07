@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import Image from "next/image";
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,10 +17,15 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Leaf, AlertCircle, Eye, EyeOff, Loader2, Mail, User, AtSign } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Leaf, AlertCircle, Eye, EyeOff, Loader2, Mail, User, AtSign, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { registerUserAction } from "./actions/user-actions";
 import { loginUserAction } from "./actions/auth-actions";
+import type { UserArea } from "@/lib/types";
+import { useCompanySettings } from "@/context/company-settings-context";
+
+const userAreas: UserArea[] = ['Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG'];
 
 const loginFormSchema = z.object({
   credential: z.string().min(1, { message: "Por favor, introduce tu correo o usuario." }),
@@ -31,9 +37,10 @@ type LoginFormValues = z.infer<typeof loginFormSchema>;
 
 const registerFormSchema = z.object({
   name: z.string().min(2, { message: "El nombre debe tener al menos 2 caracteres." }),
-  lastName: z.string().min(2, { message: "El apellido debe tener al menos 2 caracteres." }),
+  last_name: z.string().min(2, { message: "El apellido debe tener al menos 2 caracteres." }),
   username: z.string().min(3, { message: "El usuario debe tener al menos 3 caracteres." }).regex(/^[a-zA-Z0-9_.-]+$/, "Solo letras, números, puntos, guiones y guiones bajos."),
   email: z.string().email({ message: "Por favor, introduce un correo electrónico válido." }),
+  area: z.enum(userAreas, { required_error: "Debes seleccionar tu área."}),
   password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }),
   confirmPassword: z.string()
 }).refine(data => data.password === data.confirmPassword, {
@@ -53,10 +60,7 @@ type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  
-  const [backgroundUrl, setBackgroundUrl] = React.useState<string>('');
-  const [logoUrl, setLogoUrl] = React.useState<string>('');
-  const [isCompanySettingsLoading, setCompanySettingsLoading] = React.useState(true);
+  const { settings } = useCompanySettings();
   
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -71,32 +75,13 @@ export default function LoginPage() {
   
   const registerForm = useForm<RegisterFormValues>({
     resolver: zodResolver(registerFormSchema),
-    defaultValues: { name: "", lastName: "", username: "", email: "", password: "", confirmPassword: "" },
+    defaultValues: { name: "", last_name: "", username: "", email: "", area: undefined, password: "", confirmPassword: "" },
   });
   
   const forgotPasswordForm = useForm<ForgotPasswordFormValues>({
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: { email: "" },
   });
-
-  React.useEffect(() => {
-    try {
-      const storedSettings = localStorage.getItem('agronorte-company-settings');
-      if (storedSettings) {
-        const settings = JSON.parse(storedSettings);
-        if (settings.loginBackgroundUrl) {
-            setBackgroundUrl(settings.loginBackgroundUrl);
-        }
-        if (settings.logoUrl) {
-            setLogoUrl(settings.logoUrl);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load company settings', error);
-    } finally {
-        setCompanySettingsLoading(false);
-    }
-  }, []);
 
   const handleLogin = async (data: LoginFormValues) => {
     setIsLoading(true);
@@ -120,9 +105,10 @@ export default function LoginPage() {
     
     const result = await registerUserAction({
       name: data.name,
-      lastName: data.lastName,
+      last_name: data.last_name,
       username: data.username,
       email: data.email,
+      area: data.area,
       password: data.password,
     });
     
@@ -150,22 +136,29 @@ export default function LoginPage() {
     forgotPasswordForm.reset();
   }
 
-  const backgroundStyle = backgroundUrl ? { backgroundImage: `url(${backgroundUrl})` } : {};
-
   return (
     <main 
         className="flex items-center justify-center min-h-screen bg-slate-50 p-4 bg-cover bg-center transition-all duration-500"
-        style={backgroundStyle}
     >
-        {backgroundUrl && <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />}
+        {settings.login_bg_url && (
+          <Image
+            src={settings.login_bg_url}
+            alt="Fondo de inicio de sesión"
+            layout="fill"
+            objectFit="cover"
+            quality={100}
+            className="z-0"
+          />
+        )}
+        <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full max-w-sm">
             <Card className="z-10 bg-white/95 dark:bg-black/80 backdrop-blur-lg border border-white/20 shadow-2xl">
                 <CardHeader className="text-center">
                     <div className="flex justify-center items-center gap-3 mb-4">
-                        {isCompanySettingsLoading || !logoUrl ? (
-                            <Leaf className="h-12 w-12 text-primary" />
+                        {settings.logo_url ? (
+                          <Image src={settings.logo_url} alt="Logo Empresa" width={48} height={48} className="h-12 w-12 object-contain" />
                         ) : (
-                            <img src={logoUrl} alt="Logo de la empresa" className="h-12 w-12 object-contain" />
+                          <Leaf className="h-12 w-12 text-primary" />
                         )}
                         <CardTitle className="text-3xl font-headline whitespace-nowrap">Agro Norte Corp</CardTitle>
                     </div>
@@ -195,7 +188,7 @@ export default function LoginPage() {
                                     <FormControl>
                                       <div className="relative">
                                           <AtSign className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                          <Input placeholder="tu@correo.com o tu_usuario" {...field} className="pl-8" />
+                                          <Input placeholder="Correo o Usuario" {...field} className="pl-8" />
                                       </div>
                                     </FormControl>
                                     <FormMessage />
@@ -274,7 +267,7 @@ export default function LoginPage() {
                                 />
                                 <FormField
                                     control={registerForm.control}
-                                    name="lastName"
+                                    name="last_name"
                                     render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Apellidos</FormLabel>
@@ -295,7 +288,7 @@ export default function LoginPage() {
                                     <FormControl>
                                       <div className="relative">
                                         <AtSign className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                        <Input placeholder="tu_usuario_unico" {...field} className="pl-8" />
+                                        <Input placeholder="usuario" {...field} className="pl-8" />
                                       </div>
                                     </FormControl>
                                     <FormMessage />
@@ -311,9 +304,32 @@ export default function LoginPage() {
                                     <FormControl>
                                         <div className="relative">
                                             <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                            <Input type="email" placeholder="tu@correo.com" {...field} className="pl-8"/>
+                                            <Input type="email" placeholder="correo" {...field} className="pl-8"/>
                                         </div>
                                     </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={registerForm.control}
+                                name="area"
+                                render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Área</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormControl>
+                                      <div className="relative">
+                                        <Building2 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <SelectTrigger className="pl-8">
+                                            <SelectValue placeholder="Selecciona tu área..." />
+                                        </SelectTrigger>
+                                      </div>
+                                    </FormControl>
+                                    <SelectContent>
+                                        {userAreas.map(area => <SelectItem key={area} value={area}>{area}</SelectItem>)}
+                                    </SelectContent>
+                                    </Select>
                                     <FormMessage />
                                 </FormItem>
                                 )}

@@ -21,7 +21,7 @@ const userRoles: UserRole[] = ['Usuario', 'Administrador'];
 const formSchema = z.object({
   username: z.string().min(3, 'El usuario debe tener al menos 3 caracteres.'),
   name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.'),
-  lastName: z.string().min(2, 'El apellido debe tener al menos 2 caracteres.'),
+  last_name: z.string().min(2, 'El apellido debe tener al menos 2 caracteres.'),
   email: z.string().email('Debe ser un correo electrónico válido.'),
   area: z.enum(userAreas, { required_error: 'Debe seleccionar un área.' }),
   role: z.enum(userRoles, { required_error: 'Debe seleccionar un rol.' }),
@@ -60,7 +60,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, initialData }: CreateUs
         form.reset({
           username: initialData.username,
           name: initialData.name,
-          lastName: initialData.lastName,
+          last_name: initialData.last_name,
           email: initialData.email,
           area: initialData.area,
           role: initialData.role,
@@ -68,7 +68,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, initialData }: CreateUs
           confirmPassword: '',
         });
       } else {
-        form.reset({ username: '', name: '', lastName: '', email: '', area: undefined, role: undefined, password: '', confirmPassword: '' });
+        form.reset({ username: '', name: '', last_name: '', email: '', area: undefined, role: undefined, password: '', confirmPassword: '' });
       }
     }
   }, [isOpen, isEditMode, initialData, form]);
@@ -80,7 +80,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, initialData }: CreateUs
           const updateData: Partial<Omit<ManagedUser, 'id'>> = {
               username: data.username,
               name: data.name,
-              lastName: data.lastName,
+              last_name: data.last_name,
               email: data.email,
               area: data.area,
               role: data.role,
@@ -100,7 +100,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, initialData }: CreateUs
           result = await createUserAction({
               username: data.username,
               name: data.name,
-              lastName: data.lastName,
+              last_name: data.last_name,
               email: data.email,
               area: data.area,
               role: data.role,
@@ -145,7 +145,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, initialData }: CreateUs
                       <FormMessage />
                   </FormItem>
               )} />
-               <FormField control={form.control} name="lastName" render={({ field }) => (
+               <FormField control={form.control} name="last_name" render={({ field }) => (
                   <FormItem>
                       <FormLabel>Apellidos</FormLabel>
                       <FormControl><Input placeholder="Ej: Perez" {...field} /></FormControl>

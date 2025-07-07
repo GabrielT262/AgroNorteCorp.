@@ -16,7 +16,7 @@ import {
 import type { InventoryItem, InventoryCategory, User, UserArea, InventoryCultivo, InventoryUnit, InventoryHistoryEntry } from "@/lib/types";
 import { CreateProductDialog } from "@/components/dashboard/create-product-dialog";
 import { ProductDetailDialog } from "@/components/dashboard/product-detail-dialog";
-import { PlusCircle, Search, Upload, Download, Trash2, History } from "lucide-react";
+import { PlusCircle, Search, Upload, Download, History } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProductCard } from "@/components/dashboard/product-card";
 import {
@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import * as XLSX from "xlsx";
 import { InventoryHistoryDialog } from "./inventory-history-dialog";
 import { deleteProductAction } from "@/app/actions/inventory-actions";
+import { AddStockDialog } from "./add-stock-dialog";
 
 
 interface InventoryClientProps {
@@ -46,6 +47,7 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
   const [category, setCategory] = React.useState("Todos");
   const [area, setArea] = React.useState("Todos");
   const [isCreateDialogOpen, setCreateDialogOpen] = React.useState(false);
+  const [isAddStockDialogOpen, setAddStockDialogOpen] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<InventoryItem | null>(null);
   const [viewingItem, setViewingItem] = React.useState<InventoryItem | null>(null);
   const [deletingItem, setDeletingItem] = React.useState<InventoryItem | null>(null);
@@ -82,8 +84,9 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
   };
 
   const handleEdit = (item: InventoryItem) => {
-    setEditingItem(item);
-    setCreateDialogOpen(true);
+    // Editing core product info can be added here.
+    // For now, we only view details.
+    setViewingItem(item);
   };
 
   const handleDeleteConfirm = async () => {
@@ -94,7 +97,7 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
     if (result.success) {
       toast({
         title: "Producto Eliminado",
-        description: `El producto "${deletingItem.name}" ha sido eliminado. La lista se actualizará.`,
+        description: `El producto "${deletingItem.name}" ha sido eliminado.`,
       });
     } else {
       toast({
@@ -113,24 +116,26 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
   }
 
   const handleExport = () => {
-    const worksheet = XLSX.utils.json_to_sheet(inventory.map(item => ({
-      'SKU': item.id,
-      'Nombre': item.name,
-      'Descripción': item.description,
-      'Categoría': item.category,
-      'Área': item.area,
-      'Cultivo': item.cultivo || '',
-      'Ubicación': item.location,
-      'Stock': item.stock,
-      'Unidad': item.unit,
-      'Fecha de Vencimiento': item.expiryDate || '',
-    })));
+    const dataToExport = inventory.flatMap(item => 
+        item.batches.map(batch => ({
+            'SKU': item.id,
+            'Nombre': item.name,
+            'Categoría': item.category,
+            'Área': item.area,
+            'Ubicación': item.location,
+            'Lote ID': batch.id,
+            'Stock Lote': batch.stock,
+            'Unidad': item.unit,
+            'Fecha de Vencimiento Lote': batch.expiryDate || '',
+        }))
+    );
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Inventario");
-    XLSX.writeFile(workbook, "inventario.xlsx");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Inventario por Lotes");
+    XLSX.writeFile(workbook, "inventario_por_lotes.xlsx");
     toast({
         title: "Exportación Completa",
-        description: "El inventario ha sido exportado a 'inventario.xlsx'.",
+        description: "El inventario por lotes ha sido exportado.",
     });
   };
 
@@ -139,88 +144,7 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
   };
   
   const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const json = XLSX.utils.sheet_to_json<any>(worksheet);
-
-        const validCategories: InventoryCategory[] = ["Herramientas", "Repuestos", "Fertilizantes", "Agroquímicos", "Varios", "Implementos de Riego", "Implementos de SST"];
-        const validUserAreas: UserArea[] = ['Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG', 'Administrador'];
-        const validCultivos: InventoryCultivo[] = ['Uva', 'Palto'];
-        const validUnits: InventoryUnit[] = ['Unidad', 'Kg', 'Litros', 'Metros'];
-
-        const importedInventory: InventoryItem[] = json.map((row: any) => {
-          const stock = Number(row['Stock']) || 0;
-          let status: 'En Stock' | 'Poco Stock' | 'Agotado';
-          if (stock === 0) {
-            status = 'Agotado';
-          } else if (stock <= 10) {
-            status = 'Poco Stock';
-          } else {
-            status = 'En Stock';
-          }
-
-          let expiryDate;
-          if (row['Fecha de Vencimiento'] instanceof Date) {
-            const date = row['Fecha de Vencimiento'];
-            const year = date.getFullYear();
-            const month = (date.getMonth() + 1).toString().padStart(2, '0');
-            const day = date.getDate().toString().padStart(2, '0');
-            expiryDate = `${year}-${month}-${day}`;
-          }
-
-          const category = row['Categoría'];
-          const area = row['Área'];
-          const cultivo = row['Cultivo'];
-          const unit = row['Unidad'];
-
-          const newItem: InventoryItem = {
-            id: row['SKU'] || `new-sku-${Math.random()}`,
-            name: row['Nombre'] || 'Producto sin nombre',
-            description: row['Descripción'] || '',
-            category: validCategories.includes(category) ? category : 'Varios',
-            area: validUserAreas.includes(area) ? area : 'Almacén',
-            cultivo: validCultivos.includes(cultivo) ? cultivo : undefined,
-            location: row['Ubicación'] || 'Sin ubicación',
-            stock: stock,
-            unit: validUnits.includes(unit) ? unit : 'Unidad',
-            expiryDate: expiryDate,
-            status: status,
-            images: ['https://placehold.co/400x400.png'],
-            aiHint: 'product',
-          };
-          return newItem;
-        }).filter(item => item.id && item.name);
-
-        // TODO: This should call a server action to bulk-insert/update products
-        // setInventory(importedInventory);
-        
-        toast({
-            title: "Importación Exitosa (Simulado)",
-            description: `${importedInventory.length} productos han sido cargados. En una app real, esto se guardaría en la BD.`,
-            variant: "default",
-        });
-      } catch (error) {
-        console.error("Error al importar el archivo:", error);
-        toast({
-            title: "Error de Importación",
-            description: "Hubo un problema al leer el archivo Excel. Asegúrate de que el formato y las columnas sean correctas.",
-            variant: "destructive",
-        });
-      } finally {
-        if (fileInputRef.current) {
-            fileInputRef.current.value = "";
-        }
-      }
-    };
-    reader.readAsArrayBuffer(file);
+    toast({ title: "Función no implementada", description: "La importación de lotes se añadirá en una futura actualización.", variant: "default" });
   };
 
   return (
@@ -255,10 +179,16 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
                         Exportar
                     </Button>
                      {canManageProducts && (
-                      <Button onClick={handleOpenCreateDialog}>
-                          <PlusCircle className="mr-2 h-4 w-4" />
-                          Crear Producto
-                      </Button>
+                      <>
+                        <Button variant="outline" onClick={() => setAddStockDialogOpen(true)}>
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Añadir Stock
+                        </Button>
+                        <Button onClick={handleOpenCreateDialog}>
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Crear Producto
+                        </Button>
+                      </>
                      )}
                 </div>
             </div>
@@ -323,7 +253,11 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
       <CreateProductDialog
         isOpen={isCreateDialogOpen}
         onOpenChange={closeProductDialog}
-        initialData={editingItem}
+      />
+      <AddStockDialog
+        isOpen={isAddStockDialogOpen}
+        onOpenChange={setAddStockDialogOpen}
+        inventory={inventory}
       />
       <ProductDetailDialog 
         item={viewingItem}
@@ -342,7 +276,7 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. Esto eliminará permanentemente el producto "{deletingItem?.name}" del inventario.
+              Esta acción no se puede deshacer. Esto eliminará permanentemente el producto "{deletingItem?.name}" y todos sus lotes del inventario.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

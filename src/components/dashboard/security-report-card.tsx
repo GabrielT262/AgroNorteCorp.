@@ -2,7 +2,6 @@
 'use client';
 
 import * as React from 'react';
-import Image from 'next/image';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { SecurityReport, User } from '@/lib/types';
@@ -10,7 +9,6 @@ import type { SecurityReport, User } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { AlertCircle, CheckCircle, Clock, Forward, MessageSquare, Tractor, XCircle, Car, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -44,6 +42,8 @@ export function SecurityReportCard({ report, currentUser, onApprove, onReject, i
 
     const { icon: TypeIcon, color: typeColor, bg: typeBg, border: typeBorder } = typeInfo[report.type];
     const { icon: StatusIcon, color: statusColor } = statusInfo[report.status];
+    
+    const authorName = report.users ? `${report.users.name} ${report.users.last_name}` : 'Usuario del Sistema';
 
     const handleApprove = () => {
         onApprove();
@@ -64,7 +64,7 @@ export function SecurityReportCard({ report, currentUser, onApprove, onReject, i
                         <div>
                             <CardTitle className="text-lg">{report.title}</CardTitle>
                             <CardDescription className="text-xs">
-                                {format(parseISO(report.date), "dd/MM/yyyy HH:mm", { locale: es })} por {report.author}
+                                {format(parseISO(report.date), "dd/MM/yyyy HH:mm", { locale: es })} por {authorName}
                             </CardDescription>
                         </div>
                     </div>
@@ -81,29 +81,6 @@ export function SecurityReportCard({ report, currentUser, onApprove, onReject, i
                         <h4 className="font-semibold text-sm mb-1">Detalles para {report.meta.targetArea}</h4>
                         <p className="text-sm text-muted-foreground">{report.meta.details}</p>
                     </div>
-                )}
-                {report.photos && report.photos.length > 0 && (
-                     <Carousel className="w-full max-w-xs mx-auto">
-                        <CarouselContent>
-                            {report.photos.map((src, index) => (
-                            <CarouselItem key={index}>
-                                <div className="p-1">
-                                <div className="aspect-video relative bg-muted rounded-md overflow-hidden">
-                                    <Image
-                                        src={src}
-                                        alt={`Foto del reporte ${report.id}`}
-                                        fill
-                                        className="object-cover"
-                                        data-ai-hint="security report image"
-                                    />
-                                </div>
-                                </div>
-                            </CarouselItem>
-                            ))}
-                        </CarouselContent>
-                        <CarouselPrevious className="-left-8"/>
-                        <CarouselNext className="-right-8"/>
-                    </Carousel>
                 )}
             </CardContent>
             <CardFooter className="flex gap-2">

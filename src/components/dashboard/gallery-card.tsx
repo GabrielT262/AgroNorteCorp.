@@ -7,11 +7,9 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { GalleryPost } from '@/lib/types';
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { Check, User, Calendar, X, Loader2, Building2 } from 'lucide-react';
-import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 
 
@@ -24,54 +22,32 @@ interface GalleryCardProps {
 }
 
 export function GalleryCard({ post, showApprovalActions = false, onApprove, onReject, isPending }: GalleryCardProps) {
-    const allImages = post.images && post.images.length > 0 ? post.images : ['https://placehold.co/600x400.png'];
-    const aiHint = post.aiHint || 'achievement celebration';
+    const ai_hint = post.ai_hint || 'achievement celebration';
+    const authorName = post.users ? `${post.users.name} ${post.users.last_name}` : 'Usuario del Sistema';
 
     return (
         <Card className={cn("flex flex-col", post.status === 'Pendiente' && 'border-yellow-500/50 bg-yellow-500/5')}>
             <CardHeader>
-                 {allImages.length > 1 ? (
-                    <Carousel className="w-full">
-                        <CarouselContent>
-                            {allImages.map((src, index) => (
-                            <CarouselItem key={index}>
-                                <div className="aspect-video relative bg-muted rounded-md overflow-hidden">
-                                    <Image
-                                        src={src}
-                                        alt={`Foto del logro ${post.id}`}
-                                        fill
-                                        className="object-cover"
-                                        data-ai-hint={aiHint}
-                                    />
-                                </div>
-                            </CarouselItem>
-                            ))}
-                        </CarouselContent>
-                        <CarouselPrevious className="left-2" />
-                        <CarouselNext className="right-2"/>
-                    </Carousel>
-                ) : (
-                    <div className="aspect-video relative bg-muted rounded-md overflow-hidden">
-                        <Image
-                            src={allImages[0]}
-                            alt={`Foto del logro ${post.id}`}
-                            fill
-                            className="object-cover"
-                             data-ai-hint={aiHint}
-                        />
-                    </div>
-                )}
+                <div className="aspect-video relative bg-muted rounded-md overflow-hidden">
+                    <Image
+                        src={post.images?.[0] || 'https://placehold.co/600x400.png'}
+                        alt={`Foto del logro ${post.id}`}
+                        fill
+                        className="object-cover"
+                         data-ai-hint={ai_hint}
+                    />
+                </div>
             </CardHeader>
             <CardContent className="flex-grow space-y-2">
                 <CardTitle className="text-xl">{post.title}</CardTitle>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
                         <Building2 className="h-3 w-3" />
-                        <span>{post.authorArea}</span>
+                        <span>{post.author_area}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                         <User className="h-3 w-3" />
-                        <span>{post.authorName}</span>
+                        <span>{authorName}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                         <Calendar className="h-3 w-3" />

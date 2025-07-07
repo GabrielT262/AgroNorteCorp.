@@ -5,6 +5,7 @@ import type { DateRange } from "react-day-picker"
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import * as XLSX from "xlsx";
+import { useRouter } from 'next/navigation';
 
 import type { FuelHistoryEntry, FuelType, User, UserArea, VehicleType } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,7 @@ interface FuelClientProps {
 
 export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelClientProps) {
   const { toast } = useToast();
+  const router = useRouter();
   
   const [isAddStockOpen, setAddStockOpen] = React.useState(false);
   const [isDispatchOpen, setDispatchOpen] = React.useState(false);
@@ -53,8 +55,8 @@ export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelC
           toDate.setHours(23, 59, 59, 999);
           if (entryDate > toDate) return false;
       }
-      if (fuelTypeFilter !== 'all' && entry.fuelType !== fuelTypeFilter) return false;
-      if (vehicleTypeFilter !== 'all' && entry.vehicleType !== vehicleTypeFilter) return false;
+      if (fuelTypeFilter !== 'all' && entry.fuel_type !== fuelTypeFilter) return false;
+      if (vehicleTypeFilter !== 'all' && entry.vehicle_type !== vehicleTypeFilter) return false;
       return true;
     }).sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
   }, [initialHistory, dateRange, fuelTypeFilter, vehicleTypeFilter]);
@@ -64,12 +66,12 @@ export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelC
       'ID': entry.id,
       'Fecha': format(parseISO(entry.date), 'dd/MM/yyyy HH:mm'),
       'Tipo Movimiento': entry.type,
-      'Tipo Combustible': entry.fuelType,
+      'Tipo Combustible': entry.fuel_type,
       'Cantidad (gal)': entry.quantity,
       'Área Solicitante': entry.area || '-',
       'Usuario': entry.user || '-',
-      'Tipo Vehículo': entry.vehicleType || '-',
-      'Registrado Por': entry.registeredBy,
+      'Tipo Vehículo': entry.vehicle_type || '-',
+      'Registrado Por': entry.registered_by,
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -86,6 +88,10 @@ export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelC
     setDateRange(undefined);
     setFuelTypeFilter('all');
     setVehicleTypeFilter('all');
+  }
+  
+  const refreshData = () => {
+      router.refresh();
   }
 
   const hasActiveFilters = dateRange || fuelTypeFilter !== 'all' || vehicleTypeFilter !== 'all';
@@ -221,9 +227,9 @@ export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelC
                             <TableCell>
                                 <Badge variant={movementTypeVariant[entry.type]}>{entry.type}</Badge>
                             </TableCell>
-                            <TableCell>{entry.fuelType}</TableCell>
+                            <TableCell>{entry.fuel_type}</TableCell>
                             <TableCell className="text-right">{entry.quantity.toFixed(2)} gal</TableCell>
-                            <TableCell>{entry.area || entry.vehicleType}</TableCell>
+                            <TableCell>{entry.area || entry.vehicle_type}</TableCell>
                             <TableCell>{entry.user}</TableCell>
                             </TableRow>
                         ))
@@ -239,8 +245,8 @@ export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelC
         </Card>
       )}
 
-      <AddFuelStockDialog isOpen={isAddStockOpen} onOpenChange={setAddStockOpen} />
-      <DispatchFuelDialog isOpen={isDispatchOpen} onOpenChange={setDispatchOpen} />
+      <AddFuelStockDialog isOpen={isAddStockOpen} onOpenChange={setAddStockOpen} onFinished={refreshData} />
+      <DispatchFuelDialog isOpen={isDispatchOpen} onOpenChange={setDispatchOpen} onFinished={refreshData} />
     </div>
   );
 }

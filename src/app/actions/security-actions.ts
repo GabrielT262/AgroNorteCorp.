@@ -1,22 +1,35 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/db';
-import * as schema from '@/lib/schema';
+import { supabase } from '@/lib/supabase';
 import type { SecurityReport, RegisteredVehicle } from '@/lib/types';
-import { eq, ilike } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { createNotificationAction } from './notification-actions';
 
-export async function createSecurityReportAction(data: Omit<SecurityReport, 'id' | 'date' | 'author' | 'photos'>, photos: string[]) {
+export async function createSecurityReportAction(data: Omit<SecurityReport, 'id' | 'date' | 'author_id' | 'photos' | 'users'>) {
     const newReportId = `REP-${uuidv4().slice(0, 8).toUpperCase()}`;
+    const hardcodedUserId = 'usr_gabriel'; // Placeholder for actual user from session
     try {
-        await db.insert(schema.securityReports).values({
+        const newReport: Omit<SecurityReport, 'id' | 'users'> = {
             ...data,
-            id: newReportId,
-            date: new Date(),
-            author: 'Current User', // Placeholder for actual user
-            photos, // In a real app, you'd upload and get URLs
-        });
+            date: new Date().toISOString(),
+            author_id: hardcodedUserId,
+            photos: [], // Photos are not implemented yet
+        };
+
+        const { error } = await supabase.from('security_reports').insert({ id: newReportId, ...newReport });
+        if(error) throw error;
+
+
+        if (data.type === 'Solicitud de Permiso') {
+            await createNotificationAction({
+                recipient_id: 'Gerencia',
+                title: 'Nueva Solicitud de Permiso',
+                description: `Se ha creado una solicitud de permiso: "${data.title}"`,
+                path: '/dashboard/security-reports',
+            });
+        }
+        
         revalidatePath('/dashboard/security-reports');
         return { success: true, reportId: newReportId };
     } catch (error) {
@@ -27,9 +40,9 @@ export async function createSecurityReportAction(data: Omit<SecurityReport, 'id'
 
 export async function approveSecurityRequestAction(reportId: string) {
     try {
-        await db.update(schema.securityReports)
-            .set({ status: 'Aprobado' })
-            .where(eq(schema.securityReports.id, reportId));
+        const { error } = await supabase.from('security_reports').update({ status: 'Aprobado' }).eq('id', reportId);
+        if(error) throw error;
+        
         revalidatePath('/dashboard/security-reports');
         return { success: true };
     } catch (error) {
@@ -40,9 +53,9 @@ export async function approveSecurityRequestAction(reportId: string) {
 
 export async function rejectSecurityRequestAction(reportId: string) {
     try {
-        await db.update(schema.securityReports)
-            .set({ status: 'Rechazado' })
-            .where(eq(schema.securityReports.id, reportId));
+        const { error } = await supabase.from('security_reports').update({ status: 'Rechazado' }).eq('id', reportId);
+        if(error) throw error;
+
         revalidatePath('/dashboard/security-reports');
         return { success: true };
     } catch (error) {
@@ -51,35 +64,36 @@ export async function rejectSecurityRequestAction(reportId: string) {
     }
 }
 
-export async function registerVehicleEntryAction(data: Omit<RegisteredVehicle, 'id'>, photoUrl: string | null) {
+export async function registerVehicleEntryAction(data: Omit<RegisteredVehicle, 'id' | 'users'>) {
     const reportId = `VEH-${uuidv4().slice(0, 8).toUpperCase()}`;
-    const description = `Ingreso del vehículo con placa ${data.vehiclePlate}, modelo ${data.vehicleModel}, conducido por ${data.employeeName} del área ${data.employeeArea}.`;
+    const hardcodedUserId = 'usr_gabriel'; // Placeholder for actual user from session
+    const {data: employee, error: employeeError} = await supabase.from('users').select('name, last_name').eq('id', data.employee_id).single();
+    if(employeeError) throw employeeError;
+
+    const employeeFullName = `${employee.name} ${employee.last_name}`;
+    const description = `Ingreso del vehículo con placa ${data.vehicle_plate}, modelo ${data.vehicle_model}, conducido por ${employeeFullName} del área ${data.employee_area}.`;
     
     try {
         // Upsert logic for the registered vehicle
-        await db.insert(schema.registeredVehicles)
-            .values({ id: uuidv4(), ...data })
-            .onConflictDoUpdate({
-                target: schema.registeredVehicles.employeeName,
-                set: {
-                    employeeArea: data.employeeArea,
-                    vehicleType: data.vehicleType,
-                    vehicleModel: data.vehicleModel,
-                    vehiclePlate: data.vehiclePlate,
-                }
-            });
+        const { error: upsertError } = await supabase
+            .from('registered_vehicles')
+            .upsert({ id: `VEHREG-${data.employee_id}`, ...data }, { onConflict: 'employee_id' });
+        
+        if (upsertError) throw upsertError;
 
         // Create a security report for the entry
-        await db.insert(schema.securityReports).values({
-            id: reportId,
-            date: new Date(),
-            title: `Ingreso Vehicular: ${data.employeeName}`,
+        const newReport: Omit<SecurityReport, 'id' | 'users'> = {
+            date: new Date().toISOString(),
+            title: `Ingreso Vehicular: ${employeeFullName}`,
             description,
             type: 'Ingreso Vehículo Trabajador',
-            author: 'Current User', // Placeholder
-            photos: photoUrl ? [photoUrl] : [],
+            author_id: hardcodedUserId,
             status: 'Cerrado', // Vehicle entries are usually just logs, not open cases
-        });
+        };
+
+        const { error: reportError } = await supabase.from('security_reports').insert({ id: reportId, ...newReport });
+        if(reportError) throw reportError;
+
 
         revalidatePath('/dashboard/security-reports');
         return { success: true };
@@ -89,14 +103,19 @@ export async function registerVehicleEntryAction(data: Omit<RegisteredVehicle, '
     }
 }
 
-export async function findVehicleByEmployeeNameAction(name: string): Promise<RegisteredVehicle | null> {
+export async function findVehicleByEmployeeIdAction(employeeId: string): Promise<RegisteredVehicle | null> {
     try {
-        const result = await db.query.registeredVehicles.findFirst({
-            where: ilike(schema.registeredVehicles.employeeName, name)
-        });
-        return result || null;
+        const { data, error } = await supabase
+            .from('registered_vehicles')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .single();
+        
+        if(error || !data) return null;
+
+        return data;
     } catch (error) {
-        console.error('Error finding vehicle by employee name:', error);
+        console.error('Error finding vehicle by employee id:', error);
         return null;
     }
 }

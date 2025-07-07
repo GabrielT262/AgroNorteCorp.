@@ -47,9 +47,10 @@ type FormValues = z.infer<typeof formSchema>;
 interface AddFuelStockDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  onFinished: () => void;
 }
 
-export function AddFuelStockDialog({ isOpen, onOpenChange }: AddFuelStockDialogProps) {
+export function AddFuelStockDialog({ isOpen, onOpenChange, onFinished }: AddFuelStockDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, startTransition] = React.useTransition();
 
@@ -65,6 +66,7 @@ export function AddFuelStockDialog({ isOpen, onOpenChange }: AddFuelStockDialogP
         const result = await addFuelStockAction(data);
         if(result.success) {
             toast({ title: "Stock Añadido", description: "El nivel de combustible ha sido actualizado." });
+            onFinished();
             onOpenChange(false);
         } else {
             toast({ title: "Error", description: result.message || "No se pudo añadir el stock.", variant: "destructive"});

@@ -14,12 +14,6 @@ export type UserArea =
   | 'SS.GG'
   | 'Administrador';
 
-export interface User {
-  name: string;
-  role: UserRole;
-  area: UserArea;
-}
-
 export type InventoryCategory =
   | 'Herramientas'
   | 'Repuestos'
@@ -32,6 +26,12 @@ export type InventoryCategory =
 export type InventoryUnit = 'Unidad' | 'Kg' | 'Litros' | 'Metros';
 export type InventoryCultivo = 'Uva' | 'Palto';
 
+export interface Batch {
+  id: string; // Lote ID
+  stock: number;
+  expiry_date?: string; // Formato YYYY-MM-DD
+}
+
 export interface InventoryItem {
   id: string; // SKU
   name: string;
@@ -40,25 +40,24 @@ export interface InventoryItem {
   area: UserArea;
   cultivo?: InventoryCultivo;
   location: string;
-  stock: number;
   unit: InventoryUnit;
-  expiryDate?: string; // Formato YYYY-MM-DD, opcional
-  status: 'En Stock' | 'Poco Stock' | 'Agotado';
+  ai_hint: string;
   images: string[];
-  aiHint: string;
-  technicalSheetUrl?: string; // URL to PDF
-  remissionGuideUrl?: string; // URL to PDF
+  technical_sheet_url?: string;
+  batches: Batch[];
 }
 
 
 export interface OrderItem {
-  itemId: string;
+  item_id: string;
   name: string;
   quantity: number;
   unit: InventoryUnit;
-  stock: number;
   category: InventoryCategory;
-  usageDescription?: string;
+  area?: UserArea;
+  cost_center?: string;
+  cultivo?: InventoryCultivo;
+  observations?: string;
 }
 
 export interface RecentOrder {
@@ -66,30 +65,38 @@ export interface RecentOrder {
   date: string; // ISO String
   items: OrderItem[];
   status: 'Aprobado' | 'Pendiente' | 'Rechazado' | 'Despachado';
-  requestingArea: UserArea;
-  requestingUserName: string;
-  requestingUserSignatureUrl?: string;
-  costCenter?: string;
-  cultivo?: InventoryCultivo;
-  observations?: string;
+  requesting_area: UserArea;
+  requesting_user_id: string;
+  requesting_user_name?: string; // Added for display
+  users?: { // From join
+    name: string;
+    last_name: string;
+  }
 }
 
 export interface ExpiringProduct {
   name: string;
-  expiresIn: string;
+  expires_in: string; // Renamed from expiresIn for consistency
   stock: number;
+  lote_id: string;
 }
 
 export interface InventoryHistoryEntry {
   id: string;
   date: string; // ISO String
-  productName: string;
-  productId: string;
+  product_name: string;
+  product_id: string;
   type: 'Entrada' | 'Salida';
   quantity: number;
   unit: InventoryUnit;
-  requestingArea: UserArea;
-  user: string;
+  requesting_area: UserArea;
+  user_id: string;
+  order_id?: string;
+  lote_id?: string;
+   users?: { // From join
+    name: string;
+    last_name: string;
+  }
 }
 
 export interface Communication {
@@ -97,19 +104,22 @@ export interface Communication {
     title: string;
     description: string;
     date: string; // ISO String
-    authorName: string;
-    images: string[];
-    aiHint?: string;
+    author_id: string;
+    ai_hint?: string;
+    users?: { // From join
+        name: string;
+        last_name: string;
+    }
 }
 
 export interface Notification {
   id: string;
+  recipient_id: string;
   title: string;
   description: string;
-  read: boolean;
-  recipientArea: UserArea | 'Gerencia' | 'All';
   path?: string;
-  communicationId?: string;
+  is_read: boolean;
+  created_at: string; // ISO string
 }
 
 export type FuelType = 'Gasolina' | 'Petróleo';
@@ -118,10 +128,10 @@ export type VehicleType = 'Tractor' | 'Camión' | 'Camioneta' | 'Moto Lineal';
 
 export interface FuelDispatchFormValues {
     area: UserArea;
-    user: string;
-    fuelType: FuelType;
+    user_name: string;
+    fuel_type: FuelType;
     shift: Shift;
-    vehicleType: VehicleType;
+    vehicle_type: VehicleType;
     horometro?: number;
     kilometraje?: number;
     quantity: number;
@@ -131,23 +141,31 @@ export interface FuelHistoryEntry {
     id: string;
     date: string; // ISO string
     type: 'Abastecimiento' | 'Consumo';
-    fuelType: FuelType;
+    fuel_type: FuelType;
     quantity: number;
     area?: UserArea;
-    user?: string;
-    vehicleType?: VehicleType;
-    registeredBy: string;
+    user_name?: string;
+    vehicle_type?: VehicleType;
+    registered_by_id: string;
     horometro?: number;
     kilometraje?: number;
+    users?: { // From join for registered_by_id
+        name: string;
+        last_name: string;
+    }
 }
 
 export interface RegisteredVehicle {
   id: string;
-  employeeName: string;
-  employeeArea: UserArea;
-  vehicleType: string;
-  vehicleModel: string;
-  vehiclePlate: string;
+  employee_id: string;
+  employee_area: UserArea;
+  vehicle_type: string;
+  vehicle_model: string;
+  vehicle_plate: string;
+   users?: { // From join
+    name: string;
+    last_name: string;
+  }
 }
 
 export interface SecurityReport {
@@ -156,41 +174,52 @@ export interface SecurityReport {
   title: string;
   description: string;
   type: 'Incidente' | 'Novedad' | 'Solicitud de Permiso' | 'Ingreso de Proveedor' | 'Ingreso Vehículo Trabajador';
-  author: string;
-  photos: string[];
+  author_id: string;
   status: 'Abierto' | 'Cerrado' | 'Aprobación Pendiente' | 'Aprobado' | 'Rechazado';
   meta?: {
     targetArea?: 'Gerencia' | 'Almacén';
     details?: string;
   };
+  photos?: string[];
+  users?: { // From join
+    name: string;
+    last_name: string;
+  }
 }
 
 export interface GalleryPost {
   id: string;
   title: string;
   description: string;
-  authorName: string;
-  authorArea: UserArea;
+  author_id: string;
+  author_area: UserArea;
   date: string; // ISO String
-  images: string[];
   status: 'Pendiente' | 'Aprobado' | 'Rechazado';
-  aiHint?: string;
+  ai_hint?: string;
+  images: string[];
+  users?: { // From join
+    name: string;
+    last_name: string;
+  }
 }
 
 export interface ManagedUser {
   id: string;
   username: string;
   name: string;
-  lastName: string;
+  last_name: string;
   email: string;
   role: UserRole;
   area: UserArea;
   password?: string;
-  signatureUrl?: string;
+  status: 'pending' | 'active';
+  avatar_url?: string | null;
+  signature_url?: string | null;
 }
 
 export interface CompanySettings {
-  logoUrl: string;
-  loginBackgroundUrl: string;
-  supportWhatsApp: string;
+  id: number;
+  support_whats_app: string | null;
+  logo_url?: string | null;
+  login_bg_url?: string | null;
 }
