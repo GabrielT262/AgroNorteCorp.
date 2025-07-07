@@ -19,6 +19,13 @@ export function CompanySettingsProvider({ children, initialSettings }: { childre
   const [isSettingsLoading, setLoading] = React.useState(false);
   const { toast } = useToast();
 
+  // This effect ensures that if the initialSettings prop changes (e.g., due to revalidation),
+  // the component's internal state is updated to reflect those changes.
+  React.useEffect(() => {
+    setSettingsState(initialSettings);
+  }, [initialSettings]);
+
+
   const setSettings = async (formData: FormData) => {
     setLoading(true);
     const result = await updateCompanySettingsAction(formData);

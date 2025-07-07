@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import type { User, GalleryPost } from '@/lib/types';
+import type { User, GalleryPost, UserRole } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { approvePostAction, rejectPostAction } from '@/app/actions/gallery-actions';
 
@@ -22,7 +22,8 @@ export function GalleryClient({ initialPosts, currentUser }: GalleryClientProps)
   const { toast } = useToast();
   const [isPending, startTransition] = React.useTransition();
   
-  const canApprove = currentUser.role === 'Administrador' || currentUser.area === 'Gerencia';
+  const canApproveRoles: UserRole[] = ['Administrador', 'Gerencia'];
+  const canApprove = canApproveRoles.includes(currentUser.role);
 
   const approvedPosts = React.useMemo(() => initialPosts.filter(p => p.status === 'Aprobado').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [initialPosts]);
   const pendingPosts = React.useMemo(() => initialPosts.filter(p => p.status === 'Pendiente').sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [initialPosts]);

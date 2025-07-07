@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { Communication, User } from '@/lib/types';
+import type { Communication, User, UserRole } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Megaphone, Eye } from 'lucide-react';
 import { CreateCommunicationDialog } from '@/components/dashboard/create-communication-dialog';
@@ -19,8 +19,8 @@ export function CommunicationsClient({ initialCommunications, currentUser }: Com
   const [isCreateOpen, setCreateOpen] = React.useState(false);
   const [viewingCommunication, setViewingCommunication] = React.useState<Communication | null>(null);
   
-  const canCreateAreas: User['area'][] = ['Logística', 'Almacén', 'Gerencia', 'Administrador'];
-  const userCanCreate = canCreateAreas.includes(currentUser.area) || currentUser.role === 'Administrador';
+  const canCreateRoles: UserRole[] = ['Logística', 'Almacén', 'Gerencia', 'Administrador'];
+  const userCanCreate = canCreateRoles.includes(currentUser.role);
 
   return (
     <>

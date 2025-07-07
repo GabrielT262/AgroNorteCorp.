@@ -1,28 +1,20 @@
 'use server';
 
 import * as React from 'react';
-import { getCommunications } from '@/lib/db';
-import { supabase } from '@/lib/supabase';
+import { getCommunications, getCurrentUser } from '@/lib/db';
 import { CommunicationsClient } from './communications-client';
-import type { User } from '@/lib/types';
+import DashboardProvider from '../dashboard-provider';
 
-export default async function CommunicationsPage() {
-    const { data: currentUser, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', 'usr_gabriel') // Hardcoded admin user ID
-        .single();
-
-    if (error || !currentUser) {
-        return <div>Usuario no encontrado o error de base de datos.</div>;
-    }
-    
+export default async function CommunicationsPage({ searchParams }: { searchParams: { userId?: string } }) {
+    const currentUser = await getCurrentUser(searchParams.userId);
     const communications = await getCommunications();
     
     return (
-        <CommunicationsClient
-            initialCommunications={communications}
-            currentUser={currentUser}
-        />
+        <DashboardProvider searchParams={searchParams}>
+            <CommunicationsClient
+                initialCommunications={communications}
+                currentUser={currentUser}
+            />
+        </DashboardProvider>
     );
 }

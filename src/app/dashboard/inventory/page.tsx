@@ -1,9 +1,10 @@
-import type { InventoryItem, InventoryHistoryEntry } from '@/lib/types';
+import type { InventoryItem, InventoryHistoryEntry, ManagedUser } from '@/lib/types';
 import { InventoryClient } from '@/components/dashboard/inventory-client';
 import { Suspense } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card } from '@/components/ui/card';
-import { getInventoryItems, getInventoryHistory } from '@/lib/db';
+import { getInventoryItems, getInventoryHistory, getCurrentUser } from '@/lib/db';
+import DashboardProvider from '../dashboard-provider';
 
 const InventoryPageSkeleton = () => (
     <div className="flex flex-col h-full">
@@ -39,17 +40,20 @@ const InventoryPageSkeleton = () => (
 );
 
 
-export default async function InventoryPage() {
-  const [inventory, history] = await Promise.all([
+export default async function InventoryPage({ searchParams }: { searchParams: { userId?: string } }) {
+  const [inventory, history, currentUser] = await Promise.all([
     getInventoryItems(),
     getInventoryHistory(),
+    getCurrentUser(searchParams.userId),
   ]);
 
   return (
-    <div className="h-full">
-      <Suspense fallback={<InventoryPageSkeleton />}>
-        <InventoryClient inventory={inventory} history={history} />
-      </Suspense>
-    </div>
+    <DashboardProvider searchParams={searchParams}>
+        <div className="h-full">
+        <Suspense fallback={<InventoryPageSkeleton />}>
+            <InventoryClient inventory={inventory} history={history} currentUser={currentUser} />
+        </Suspense>
+        </div>
+    </DashboardProvider>
   );
 }

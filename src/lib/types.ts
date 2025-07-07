@@ -1,8 +1,7 @@
 
 
-export type UserRole = 'Administrador' | 'Usuario';
-
-export type UserArea =
+// The roles are now the same as the areas for a more granular permission system.
+export type UserRole =
   | 'Gerencia'
   | 'Logística'
   | 'RR.HH'
@@ -13,6 +12,8 @@ export type UserArea =
   | 'Sanidad'
   | 'SS.GG'
   | 'Administrador';
+
+export type UserArea = UserRole;
 
 export type InventoryCategory =
   | 'Herramientas'
@@ -216,6 +217,7 @@ export interface ManagedUser {
   status: 'pending' | 'active';
   avatar_url?: string | null;
   signature_url?: string | null;
+  whatsapp_number?: string | null;
 }
 
 export interface CompanySettings {
@@ -223,4 +225,17 @@ export interface CompanySettings {
   support_whats_app: string | null;
   logo_url?: string | null;
   login_bg_url?: string | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  created_at: string; // ISO String
+  sender_id: string;
+  channel: string;
+  content: string;
+  users?: { // From join
+    name: string;
+    last_name: string;
+    avatar_url: string | null;
+  }
 }

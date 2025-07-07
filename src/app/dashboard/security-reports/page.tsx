@@ -2,26 +2,24 @@
 'use server';
 
 import * as React from 'react';
-import type { User } from '@/lib/types';
-import { getSecurityReports, getRegisteredVehicles } from '@/lib/db';
+import { getSecurityReports, getRegisteredVehicles, getCurrentUser } from '@/lib/db';
 import { SecurityReportsClient } from './security-reports-client';
+import DashboardProvider from '../dashboard-provider';
 
-
-// Hardcoded current user for demonstration
-const currentUser: User = { name: 'Gabriel T', role: 'Administrador', area: 'Seguridad Patrimonial' };
-// To test other roles, change the currentUser object above to:
-// const currentUser: User = { name: 'Ana G', role: 'Usuario', area: 'Gerencia' };
-
-
-export default async function SecurityReportsPage() {
-  const reports = await getSecurityReports();
-  const registeredVehicles = await getRegisteredVehicles();
+export default async function SecurityReportsPage({ searchParams }: { searchParams: { userId?: string } }) {
+  const [reports, registeredVehicles, currentUser] = await Promise.all([
+    getSecurityReports(),
+    getRegisteredVehicles(),
+    getCurrentUser(searchParams.userId),
+  ]);
 
   return (
-    <SecurityReportsClient
-      initialReports={reports} 
-      initialRegisteredVehicles={registeredVehicles}
-      currentUser={currentUser} 
-    />
+    <DashboardProvider searchParams={searchParams}>
+        <SecurityReportsClient
+            initialReports={reports} 
+            initialRegisteredVehicles={registeredVehicles}
+            currentUser={currentUser} 
+        />
+    </DashboardProvider>
   );
 }

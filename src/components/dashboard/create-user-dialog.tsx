@@ -4,7 +4,7 @@ import * as React from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { ManagedUser, UserArea, UserRole } from '@/lib/types';
+import type { ManagedUser, UserRole } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { createUserAction, updateUserAction } from '@/app/actions/user-actions';
 import { Loader2 } from 'lucide-react';
@@ -15,16 +15,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const userAreas: UserArea[] = ['Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG', 'Administrador'];
-const userRoles: UserRole[] = ['Usuario', 'Administrador'];
+const userRoles: UserRole[] = ['Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG', 'Administrador'];
 
 const formSchema = z.object({
   username: z.string().min(3, 'El usuario debe tener al menos 3 caracteres.'),
   name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres.'),
   last_name: z.string().min(2, 'El apellido debe tener al menos 2 caracteres.'),
   email: z.string().email('Debe ser un correo electrónico válido.'),
-  area: z.enum(userAreas, { required_error: 'Debe seleccionar un área.' }),
-  role: z.enum(userRoles, { required_error: 'Debe seleccionar un rol.' }),
+  whatsapp_number: z.string().min(9, 'El número debe tener al menos 9 dígitos.').optional().or(z.literal('')),
+  area: z.enum(userRoles, { required_error: 'Debe seleccionar un área/rol.' }),
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres.').optional().or(z.literal('')),
   confirmPassword: z.string().optional(),
 }).refine(data => {
@@ -63,12 +62,12 @@ export function CreateUserDialog({ isOpen, onOpenChange, initialData }: CreateUs
           last_name: initialData.last_name,
           email: initialData.email,
           area: initialData.area,
-          role: initialData.role,
+          whatsapp_number: initialData.whatsapp_number || '',
           password: '',
           confirmPassword: '',
         });
       } else {
-        form.reset({ username: '', name: '', last_name: '', email: '', area: undefined, role: undefined, password: '', confirmPassword: '' });
+        form.reset({ username: '', name: '', last_name: '', email: '', area: undefined, whatsapp_number: '', password: '', confirmPassword: '' });
       }
     }
   }, [isOpen, isEditMode, initialData, form]);
@@ -76,35 +75,40 @@ export function CreateUserDialog({ isOpen, onOpenChange, initialData }: CreateUs
   const onSubmit = (data: FormValues) => {
     startSubmitTransition(async () => {
       let result;
+      // The role is now the same as the area
+      const finalData = { ...data, role: data.area };
+
       if (isEditMode && initialData) {
           const updateData: Partial<Omit<ManagedUser, 'id'>> = {
-              username: data.username,
-              name: data.name,
-              last_name: data.last_name,
-              email: data.email,
-              area: data.area,
-              role: data.role,
+              username: finalData.username,
+              name: finalData.name,
+              last_name: finalData.last_name,
+              email: finalData.email,
+              area: finalData.area,
+              role: finalData.role,
+              whatsapp_number: finalData.whatsapp_number,
           };
-          if (data.password) {
-              updateData.password = data.password;
+          if (finalData.password) {
+              updateData.password = finalData.password;
           }
           result = await updateUserAction(initialData.id, updateData);
           if (result.success) {
             toast({ title: 'Usuario Actualizado', description: 'Los datos del usuario han sido guardados.' });
           }
       } else {
-          if (!data.password) {
+          if (!finalData.password) {
               toast({ title: 'Contraseña requerida', description: 'Debe establecer una contraseña para el nuevo usuario.', variant: 'destructive' });
               return;
           }
           result = await createUserAction({
-              username: data.username,
-              name: data.name,
-              last_name: data.last_name,
-              email: data.email,
-              area: data.area,
-              role: data.role,
-              password: data.password!,
+              username: finalData.username,
+              name: finalData.name,
+              last_name: finalData.last_name,
+              email: finalData.email,
+              area: finalData.area,
+              role: finalData.role,
+              password: finalData.password!,
+              whatsapp_number: finalData.whatsapp_number
           });
            if (result.success) {
             toast({ title: 'Usuario Creado', description: 'El nuevo usuario ha sido añadido al sistema.' });
@@ -161,18 +165,16 @@ export function CreateUserDialog({ isOpen, onOpenChange, initialData }: CreateUs
                 </FormItem>
             )} />
             <div className="grid grid-cols-2 gap-4">
-                <FormField control={form.control} name="area" render={({ field }) => (
+                <FormField control={form.control} name="whatsapp_number" render={({ field }) => (
                     <FormItem>
-                    <FormLabel>Área</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger></FormControl>
-                        <SelectContent>{userAreas.map(area => <SelectItem key={area} value={area}>{area}</SelectItem>)}</SelectContent>
-                    </Select><FormMessage />
+                        <FormLabel>N° de WhatsApp</FormLabel>
+                        <FormControl><Input placeholder="987654321" {...field} /></FormControl>
+                        <FormMessage />
                     </FormItem>
                 )} />
-                <FormField control={form.control} name="role" render={({ field }) => (
+                <FormField control={form.control} name="area" render={({ field }) => (
                     <FormItem>
-                    <FormLabel>Rol</FormLabel>
+                    <FormLabel>Área / Rol</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger></FormControl>
                         <SelectContent>{userRoles.map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}</SelectContent>

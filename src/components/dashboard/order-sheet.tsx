@@ -27,15 +27,10 @@ import { Trash2, Loader2, Minus, Plus } from "lucide-react";
 import { useOrder } from "@/context/order-context";
 import { createOrderAction } from "@/app/actions/order-actions";
 
-// Hardcoded current user for demo purposes. In a real app, this would come from an auth context.
-const currentUser = { 
-  id: 'usr_gabriel',
-  name: 'Gabriel T', 
-  area: 'Administrador' as UserArea,
-};
 
 export function OrderSheet() {
   const { 
+    currentUser,
     orderItems, 
     removeItem, 
     updateItemQuantity,
@@ -52,6 +47,11 @@ export function OrderSheet() {
   const cultivos: InventoryCultivo[] = ['Uva', 'Palto'];
 
   const handleSubmitOrder = () => {
+    if (!currentUser) {
+      toast({ title: "Error", description: "No se pudo identificar al usuario. Por favor, recarga la página.", variant: "destructive" });
+      return;
+    }
+    
     if (orderItems.length === 0) {
       toast({ title: "Error", description: "Tu lista de pedidos está vacía.", variant: "destructive" });
       return;

@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { SecurityReport, User } from '@/lib/types';
+import type { SecurityReport, User, UserRole } from '@/lib/types';
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +22,8 @@ interface SecurityReportCardProps {
 }
 
 export function SecurityReportCard({ report, currentUser, onApprove, onReject, isPending }: SecurityReportCardProps) {
-    const canApprove = (currentUser.area === 'Gerencia' || currentUser.role === 'Administrador');
+    const canApproveRoles: UserRole[] = ['Gerencia', 'Administrador'];
+    const canApprove = canApproveRoles.includes(currentUser.role);
 
     const typeInfo = {
         'Incidente': { icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-500/10', border: 'border-red-500/20' },

@@ -1,8 +1,12 @@
+
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 import { CompanySettingsProvider } from '@/context/company-settings-context';
 import { getCompanySettings } from '@/lib/db';
+import { ThemeProvider } from '@/context/theme-context';
+
+const defaultIcon = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>';
 
 export async function generateMetadata(): Promise<Metadata> {
   const companySettings = await getCompanySettings();
@@ -11,8 +15,8 @@ export async function generateMetadata(): Promise<Metadata> {
     title: 'Agro Norte Corp',
     description: 'Sistema de gestión de inventario y pedidos.',
     icons: {
-      icon: companySettings.logo_url || 'https://placehold.co/32x32.png',
-      apple: companySettings.logo_url || 'https://placehold.co/180x180.png',
+      icon: companySettings.logo_url || defaultIcon,
+      apple: companySettings.logo_url || defaultIcon,
     },
   };
 }
@@ -22,21 +26,17 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Fetching settings for non-dashboard pages like the login page.
   const companySettings = await getCompanySettings();
 
   return (
-    <html lang="es">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className="font-body antialiased">
-        <CompanySettingsProvider initialSettings={companySettings}>
-            {children}
-        </CompanySettingsProvider>
-        <Toaster />
+    <html lang="es" suppressHydrationWarning>
+      <body className="antialiased">
+        <ThemeProvider defaultTheme="dark" storageKey="agronorte-ui-theme">
+          <CompanySettingsProvider initialSettings={companySettings}>
+              {children}
+          </CompanySettingsProvider>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

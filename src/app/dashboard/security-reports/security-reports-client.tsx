@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { differenceInCalendarDays, parseISO } from 'date-fns';
-import type { User, SecurityReport, RegisteredVehicle } from '@/lib/types';
+import type { User, SecurityReport, RegisteredVehicle, UserRole } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import {
   approveSecurityRequestAction,
@@ -34,7 +34,8 @@ export function SecurityReportsClient({
   const [isPending, startTransition] = React.useTransition();
   const { toast } = useToast();
 
-  const canManageReports = currentUser.area === 'Seguridad Patrimonial' || currentUser.role === 'Administrador';
+  const canManageReportsRoles: UserRole[] = ['Seguridad Patrimonial', 'Administrador'];
+  const canManageReports = canManageReportsRoles.includes(currentUser.role);
 
   React.useEffect(() => {
     // This effect runs only on the client, after hydration, avoiding the mismatch.

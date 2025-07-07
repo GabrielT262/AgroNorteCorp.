@@ -1,12 +1,18 @@
 import { ManageUsersClient } from '@/components/dashboard/manage-users-client';
-import { getUsers } from '@/lib/db';
+import { getUsers, getCurrentUser } from '@/lib/db';
+import DashboardProvider from '../dashboard-provider';
 
-export default async function ManageUsersPage() {
-  const users = await getUsers();
+export default async function ManageUsersPage({ searchParams }: { searchParams: { userId?: string } }) {
+  const [users, currentUser] = await Promise.all([
+      getUsers(),
+      getCurrentUser(searchParams.userId)
+  ]);
   
   return (
-    <div className="h-full">
-      <ManageUsersClient initialUsers={users} />
-    </div>
+    <DashboardProvider searchParams={searchParams}>
+        <div className="h-full">
+            <ManageUsersClient initialUsers={users} currentUser={currentUser} />
+        </div>
+    </DashboardProvider>
   );
 }

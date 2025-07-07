@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import type { OrderItem, InventoryItem } from '@/lib/types';
+import type { OrderItem, InventoryItem, ManagedUser } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
 interface OrderContextType {
@@ -14,11 +14,12 @@ interface OrderContextType {
   clearOrder: () => void;
   isSheetOpen: boolean;
   setSheetOpen: (open: boolean) => void;
+  currentUser: Omit<ManagedUser, 'password'> | null;
 }
 
 const OrderContext = React.createContext<OrderContextType | undefined>(undefined);
 
-export const OrderProvider = ({ children }: { children: React.ReactNode }) => {
+export const OrderProvider = ({ children, currentUser }: { children: React.ReactNode, currentUser: Omit<ManagedUser, 'password'> | null }) => {
   const [orderItems, setOrderItems] = React.useState<OrderItem[]>([]);
   const [isSheetOpen, setSheetOpen] = React.useState(false);
   const { toast } = useToast();
@@ -89,7 +90,7 @@ export const OrderProvider = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <OrderContext.Provider value={{ orderItems, addItem, removeItem, updateItemQuantity, updateItemDetails, clearOrder, isSheetOpen, setSheetOpen }}>
+    <OrderContext.Provider value={{ currentUser, orderItems, addItem, removeItem, updateItemQuantity, updateItemDetails, clearOrder, isSheetOpen, setSheetOpen }}>
       {children}
     </OrderContext.Provider>
   );

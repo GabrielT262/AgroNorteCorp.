@@ -3,7 +3,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { supabase } from '@/lib/supabase';
-import type { InventoryItem, InventoryHistoryEntry, Batch } from '@/lib/types';
+import type { InventoryItem, InventoryHistoryEntry, Batch, InventoryCategory, InventoryUnit, UserArea, InventoryCultivo } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 
 async function uploadFileAndGetUrl(file: File, bucket: string, path: string): Promise<string | null> {
@@ -149,4 +149,127 @@ export async function addStockAction(data: { productId: string; loteId: string; 
         console.error('Error adding stock:', error);
         return { success: false, message: 'Error al añadir stock.' };
     }
+}
+
+
+export async function importInventoryAction(data: any[]) {
+    const hardcodedUserId = 'usr_gabriel'; // Placeholder
+    let created = 0;
+    let updated = 0;
+    let errors = 0;
+    const errorMessages: string[] = [];
+    const categories: InventoryCategory[] = ["Herramientas", "Repuestos", "Fertilizantes", "Agroquímicos", "Varios", "Implementos de Riego", "Implementos de SST"];
+    const units: InventoryUnit[] = ['Unidad', 'Kg', 'Litros', 'Metros'];
+    const userAreas: UserArea[] = ['Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG', 'Administrador'];
+    const cultivos: InventoryCultivo[] = ['Uva', 'Palto'];
+
+    const { data: allProducts, error: fetchAllError } = await supabase.from('inventory_items').select('id, batches, name, unit');
+    if (fetchAllError) {
+        return { success: false, message: 'Error fetching existing products.' };
+    }
+
+    const productMap = new Map(allProducts.map(p => [p.id, p]));
+    const inventoryUpdates: any[] = [];
+    const historyInserts: any[] = [];
+
+    for (const [index, row] of data.entries()) {
+        const { sku, name, description, category, area, cultivo, location, unit, lote_id, stock, expiry_date } = row;
+        
+        const rowNum = index + 2;
+        if (!sku || !name || !category || !area || !location || !unit || !lote_id || stock === undefined) {
+            errors++;
+            errorMessages.push(`Fila ${rowNum}: Faltan datos requeridos (sku, name, category, etc.).`);
+            continue;
+        }
+
+        if (!categories.includes(category) || !units.includes(unit) || !userAreas.includes(area) || (cultivo && !cultivos.includes(cultivo))) {
+             errors++;
+             errorMessages.push(`Fila ${rowNum}: Valor inválido en categoría, unidad, área o cultivo.`);
+             continue;
+        }
+
+        const existingProduct = productMap.get(sku);
+
+        const newBatch: Batch = {
+            id: lote_id,
+            stock: Number(stock),
+            expiry_date: expiry_date ? new Date(expiry_date).toISOString().split('T')[0] : undefined,
+        };
+
+        if (existingProduct) {
+            const existingLote = existingProduct.batches.find((b: Batch) => b.id.toLowerCase() === lote_id.toLowerCase());
+            if (existingLote) {
+                errors++;
+                errorMessages.push(`Fila ${rowNum}: El lote ID "${lote_id}" ya existe para el producto ${sku}.`);
+                continue;
+            }
+            const updatedBatches = [...existingProduct.batches, newBatch];
+            inventoryUpdates.push({ id: sku, batches: updatedBatches });
+            updated++;
+        } else {
+            const newProduct: InventoryItem = {
+                id: sku,
+                name,
+                description: description || '',
+                category,
+                area,
+                cultivo: cultivo || undefined,
+                location,
+                unit,
+                images: [],
+                batches: [newBatch],
+                ai_hint: `${category} ${name}`,
+            };
+            inventoryUpdates.push(newProduct);
+            created++;
+        }
+        
+        historyInserts.push({
+            id: `HIST-${uuidv4().slice(0, 12)}`,
+            date: new Date().toISOString(),
+            product_id: sku,
+            product_name: name,
+            type: 'Entrada',
+            quantity: Number(stock),
+            unit: unit,
+            requesting_area: 'Almacén',
+            user_id: hardcodedUserId,
+            lote_id: lote_id,
+        });
+    }
+
+    if(inventoryUpdates.length > 0) {
+        const { error: upsertError } = await supabase.from('inventory_items').upsert(inventoryUpdates, { onConflict: 'id' });
+        if(upsertError) {
+             return { success: false, message: `Error guardando productos: ${upsertError.message}` };
+        }
+    }
+
+    if(historyInserts.length > 0) {
+        const { error: historyError } = await supabase.from('inventory_history').insert(historyInserts);
+         if(historyError) {
+             return { success: false, message: `Error guardando historial: ${historyError.message}` };
+        }
+    }
+
+    revalidatePath('/dashboard/inventory');
+
+    if (errors > 0) {
+        return { 
+            success: false, 
+            message: errorMessages.slice(0, 3).join(' '),
+            processed: data.length,
+            created,
+            updated,
+            errors,
+        };
+    }
+
+    return { 
+        success: true,
+        processed: data.length,
+        created,
+        updated,
+        errors,
+    };
 }

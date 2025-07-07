@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { InventoryItem, RecentOrder, ManagedUser, SecurityReport, GalleryPost, Communication, FuelHistoryEntry, User, RegisteredVehicle, InventoryHistoryEntry, CompanySettings, Notification, ExpiringProduct, FuelType } from './types';
+import type { InventoryItem, RecentOrder, ManagedUser, SecurityReport, GalleryPost, Communication, FuelHistoryEntry, UserRole, RegisteredVehicle, InventoryHistoryEntry, CompanySettings, Notification, ExpiringProduct, FuelType, ChatMessage } from './types';
 import { differenceInDays, parseISO } from 'date-fns';
 
 
@@ -7,6 +7,47 @@ import { differenceInDays, parseISO } from 'date-fns';
 // This file uses the Supabase client to query the database.
 // All functions are async to maintain the same signature as a real DB query.
 // ==================
+
+
+// Mock user data for testing different roles, as seen in page comments.
+// This is used as a fallback if the user ID is not found in your Supabase DB.
+const mockUsers: { [key: string]: ManagedUser } = {
+  'usr_gabriel': { id: 'usr_gabriel', name: 'Gabriel', last_name: 'T', role: 'Administrador', area: 'Administrador', username: 'GabrielT', email: 'admin@agronorte.com', status: 'active' },
+  'usr_ana_g': { id: 'usr_ana_g', name: 'Ana', last_name: 'G', role: 'Gerencia', area: 'Gerencia', username: 'AnaG', email: 'gerencia@agronorte.com', status: 'active' },
+  'usr_carlos_p': { id: 'usr_carlos_p', name: 'Carlos', last_name: 'P', role: 'Almacén', area: 'Almacén', username: 'CarlosP', email: 'almacen@agronorte.com', status: 'active' },
+  'usr_juan_v': { id: 'usr_juan_v', name: 'Juan', last_name: 'V', role: 'Producción', area: 'Producción', username: 'JuanV', email: 'produccion@agronorte.com', status: 'active' },
+  'usr_seguridad': { id: 'usr_seguridad', name: 'Seguridad', last_name: 'Vigilante', role: 'Seguridad Patrimonial', area: 'Seguridad Patrimonial', username: 'SeguridadV', email: 'seguridad@agronorte.com', status: 'active' },
+};
+
+
+export async function getCurrentUser(userId?: string | null): Promise<ManagedUser> {
+    // In a real app, this would be determined by a secure session.
+    // For this prototype, we use the userId from the URL to simulate a logged-in user.
+    //
+    // IDs to test different roles:
+    // 'usr_gabriel'      -> Administrador (full access)
+    // 'usr_ana_g'        -> Gerencia (approval access)
+    // 'usr_carlos_p'     -> Almacén (dispatch/inventory management access)
+    // 'usr_seguridad'    -> Seguridad Patrimonial (security reports access)
+    // 'usr_juan_v'       -> Producción (restricted access: view inventory, make requests)
+    
+    // If no userId is provided (e.g., direct navigation), default to admin.
+    const idToFetch = userId || 'usr_gabriel'; 
+
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', idToFetch)
+        .single();
+    
+    if (error || !user) {
+        console.warn(`Could not fetch user '${idToFetch}' from Supabase. Using mock data as a fallback. This is expected if the user does not exist in your database.`);
+        const fallbackUser = mockUsers[idToFetch] || mockUsers['usr_gabriel'];
+        return fallbackUser;
+    }
+
+    return user;
+}
 
 
 // INVENTORY
@@ -47,7 +88,7 @@ export async function getOrders(): Promise<RecentOrder[]> {
 
 // USERS
 export async function getUsers(): Promise<ManagedUser[]> {
-    const { data, error } = await supabase.from('users').select('id, username, name, last_name, email, role, area, status, avatar_url, signature_url').order('name');
+    const { data, error } = await supabase.from('users').select('id, username, name, last_name, email, role, area, status, avatar_url, signature_url, whatsapp_number').order('name');
     if (error) {
       console.error('Error fetching users:', error);
       return [];
@@ -135,7 +176,7 @@ export async function getFuelLevels(): Promise<{ [key in FuelType]: number }> {
 }
 
 // DASHBOARD
-export async function getDashboardData(currentUser: { area: string, role: string }) {
+export async function getDashboardData(currentUser: { area: UserRole, role: UserRole }) {
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
     const today = new Date();
@@ -214,4 +255,19 @@ export async function getCompanySettings(): Promise<CompanySettings> {
         return { id: 1, support_whats_app: '+123456789', logo_url: null, login_bg_url: null };
     }
     return data;
+}
+
+// CHAT
+export async function getChatMessages(channel: string): Promise<ChatMessage[]> {
+    const { data, error } = await supabase
+        .from('messages')
+        .select('*, users(name, last_name, avatar_url)')
+        .eq('channel', channel)
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching chat messages:', error);
+        return [];
+    }
+    return data || [];
 }

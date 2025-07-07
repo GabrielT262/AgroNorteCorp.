@@ -1,20 +1,17 @@
 'use server';
 
 import * as React from 'react';
-import type { User } from '@/lib/types';
-import { getOrders } from '@/lib/db';
+import { getOrders, getCurrentUser } from '@/lib/db';
 import { RequestsClient } from './requests-client';
+import DashboardProvider from '../dashboard-provider';
 
-// Hardcoded current user for demonstration
-const currentUser: User = { name: 'Gabriel T', role: 'Administrador', area: 'Administrador' };
-// To test other roles, change the currentUser object above to:
-// const currentUser: User = { name: 'Ana G', role: 'Usuario', area: 'Gerencia' };
-// const currentUser: User = { name: 'Carlos P', role: 'Usuario', area: 'Almacén' };
-// const currentUser: User = { name: 'Maria L', role: 'Usuario', area: 'Logística' };
-// const currentUser: User = { name: 'Juan V', role: 'Usuario', area: 'Producción' };
-
-export default async function RequestsPage() {
+export default async function RequestsPage({ searchParams }: { searchParams: { userId?: string } }) {
+    const currentUser = await getCurrentUser(searchParams.userId);
     const orders = await getOrders();
     
-    return <RequestsClient initialOrders={orders} currentUser={currentUser} />;
+    return (
+        <DashboardProvider searchParams={searchParams}>
+            <RequestsClient initialOrders={orders} currentUser={currentUser} />
+        </DashboardProvider>
+    );
 }

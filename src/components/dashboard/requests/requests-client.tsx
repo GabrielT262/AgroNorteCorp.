@@ -87,7 +87,7 @@ export function RequestsClient({ initialOrders, currentUser }: RequestsClientPro
         </TableHeader>
         <TableBody>
           {orders.map(order => {
-            const userName = order.users ? `${order.users.name} ${order.users.last_name}` : 'Usuario no encontrado';
+            const userName = order.users ? `${order.users.name} ${order.users.last_name}` : order.requesting_user_id;
             return (
                 <TableRow key={order.id}>
                 <TableCell className="font-medium">{order.id}</TableCell>

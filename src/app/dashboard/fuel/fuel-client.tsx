@@ -8,7 +8,7 @@ import { es } from 'date-fns/locale';
 import * as XLSX from "xlsx";
 import { useRouter } from 'next/navigation';
 
-import type { FuelHistoryEntry, FuelType, User, UserArea, VehicleType } from '@/lib/types';
+import type { FuelHistoryEntry, FuelType, User, UserRole, VehicleType } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -24,8 +24,7 @@ import { AddFuelStockDialog } from '@/components/dashboard/add-fuel-stock-dialog
 import { DispatchFuelDialog } from '@/components/dashboard/dispatch-fuel-dialog';
 import { Plus, Download, Calendar as CalendarIcon, X, Fuel } from 'lucide-react';
 
-const canViewHistoryAreas: UserArea[] = ['Gerencia', 'Logística', 'Almacén', 'Administrador'];
-const canManageFuelAreas: UserArea[] = ['Gerencia', 'Logística', 'Almacén', 'Administrador'];
+const canManageFuelRoles: UserRole[] = ['Logística', 'Almacén', 'Administrador'];
 
 interface FuelClientProps {
     initialHistory: FuelHistoryEntry[];
@@ -45,8 +44,7 @@ export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelC
   const [fuelTypeFilter, setFuelTypeFilter] = React.useState<"all" | FuelType>("all");
   const [vehicleTypeFilter, setVehicleTypeFilter] = React.useState<"all" | VehicleType>("all");
 
-  const canViewHistory = canViewHistoryAreas.includes(currentUser.area) || currentUser.role === 'Administrador';
-  const canManageFuel = canManageFuelAreas.includes(currentUser.area) || currentUser.role === 'Administrador';
+  const canManageFuel = canManageFuelRoles.includes(currentUser.role);
   const vehicleTypes: VehicleType[] = ['Tractor', 'Camión', 'Camioneta', 'Moto Lineal'];
 
   const filteredHistory = React.useMemo(() => {
@@ -131,129 +129,138 @@ export function FuelClient({ initialHistory, initialLevels, currentUser }: FuelC
         <FuelGauge fuelType="Petróleo" currentLevel={initialLevels.Petróleo} maxLevel={1000} />
       </div>
 
-      {canViewHistory && (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
-                <div>
-                    <CardTitle>Historial de Movimientos</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">Consulta el registro de consumo y abastecimiento.</p>
-                </div>
+      
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+              <div>
+                  <CardTitle>Historial de Movimientos</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">Consulta el registro de consumo y abastecimiento.</p>
+              </div>
+              {canManageFuel && (
                 <Button onClick={handleExport} variant="outline"><Download className="mr-2 h-4 w-4" />Exportar</Button>
-            </div>
-            <div className="flex flex-wrap items-end gap-2 pt-4">
+              )}
+          </div>
+          <div className="flex flex-wrap items-end gap-2 pt-4">
+              <div className="grid gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Rango de Fechas</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                      <Button
+                          id="date"
+                          variant={"outline"}
+                          className={cn(
+                          "w-[260px] justify-start text-left font-normal",
+                          !dateRange && "text-muted-foreground"
+                          )}
+                      >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {dateRange?.from ? (
+                          dateRange.to ? (
+                              <>
+                              {format(dateRange.from, "LLL dd, y")} -{" "}
+                              {format(dateRange.to, "LLL dd, y")}
+                              </>
+                          ) : (
+                              format(dateRange.from, "LLL dd, y")
+                          )
+                          ) : (
+                          <span>Seleccionar rango</span>
+                          )}
+                      </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                          initialFocus
+                          mode="range"
+                          defaultMonth={dateRange?.from}
+                          selected={dateRange}
+                          onSelect={setDateRange}
+                          numberOfMonths={2}
+                          locale={es}
+                      />
+                      </PopoverContent>
+                  </Popover>
+              </div>
+              <div className="grid gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Combustible</label>
+                  <Select value={fuelTypeFilter} onValueChange={(v) => setFuelTypeFilter(v as any)}>
+                      <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Filtrar..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="all">Todos</SelectItem>
+                          <SelectItem value="Gasolina">Gasolina</SelectItem>
+                          <SelectItem value="Petróleo">Petróleo</SelectItem>
+                      </SelectContent>
+                  </Select>
+              </div>
                 <div className="grid gap-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">Rango de Fechas</label>
-                     <Popover>
-                        <PopoverTrigger asChild>
-                        <Button
-                            id="date"
-                            variant={"outline"}
-                            className={cn(
-                            "w-[260px] justify-start text-left font-normal",
-                            !dateRange && "text-muted-foreground"
-                            )}
-                        >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {dateRange?.from ? (
-                            dateRange.to ? (
-                                <>
-                                {format(dateRange.from, "LLL dd, y")} -{" "}
-                                {format(dateRange.to, "LLL dd, y")}
-                                </>
-                            ) : (
-                                format(dateRange.from, "LLL dd, y")
-                            )
-                            ) : (
-                            <span>Seleccionar rango</span>
-                            )}
-                        </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                            initialFocus
-                            mode="range"
-                            defaultMonth={dateRange?.from}
-                            selected={dateRange}
-                            onSelect={setDateRange}
-                            numberOfMonths={2}
-                            locale={es}
-                        />
-                        </PopoverContent>
-                    </Popover>
-                </div>
-                <div className="grid gap-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">Combustible</label>
-                    <Select value={fuelTypeFilter} onValueChange={(v) => setFuelTypeFilter(v as any)}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Filtrar..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">Todos</SelectItem>
-                            <SelectItem value="Gasolina">Gasolina</SelectItem>
-                            <SelectItem value="Petróleo">Petróleo</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                 <div className="grid gap-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">Tipo de Vehículo</label>
-                    <Select value={vehicleTypeFilter} onValueChange={(v) => setVehicleTypeFilter(v as any)}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Filtrar..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">Todos</SelectItem>
-                            {vehicleTypes.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-                {hasActiveFilters && (
-                    <Button variant="ghost" onClick={clearFilters}>
-                        <X className="mr-2 h-4 w-4"/>
-                        Limpiar filtros
-                    </Button>
-                )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="border rounded-md">
-                <Table>
-                <TableHeader>
-                    <TableRow>
+                  <label className="text-xs font-medium text-muted-foreground">Tipo de Vehículo</label>
+                  <Select value={vehicleTypeFilter} onValueChange={(v) => setVehicleTypeFilter(v as any)}>
+                      <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Filtrar..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="all">Todos</SelectItem>
+                          {vehicleTypes.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                      </SelectContent>
+                  </Select>
+              </div>
+              {hasActiveFilters && (
+                  <Button variant="ghost" onClick={clearFilters}>
+                      <X className="mr-2 h-4 w-4"/>
+                      Limpiar filtros
+                  </Button>
+              )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="border rounded-md">
+              <Table>
+              <TableHeader>
+                <TableRow>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Combustible</TableHead>
                     <TableHead className="text-right">Cantidad</TableHead>
-                    <TableHead>Detalle</TableHead>
-                    <TableHead>Usuario</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {filteredHistory.length > 0 ? (
-                        filteredHistory.map(entry => (
-                            <TableRow key={entry.id}>
+                    <TableHead>Vehículo</TableHead>
+                    <TableHead>Solicitante</TableHead>
+                    <TableHead>Registrado Por</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                  {filteredHistory.length > 0 ? (
+                      filteredHistory.map(entry => {
+                        const registeredBy = entry.users ? `${entry.users.name} ${entry.users.last_name}` : (entry.registered_by_id || 'Sistema');
+                        const vehicleInfo = entry.vehicle_type ? `${entry.vehicle_type}${entry.vehicle_model ? ` (${entry.vehicle_model})` : ''}` : '-';
+                        const applicantInfo = entry.user_name ? `${entry.user_name} (${entry.area})` : (entry.area || '-');
+
+                        return (
+                          <TableRow key={entry.id}>
                             <TableCell className="font-medium whitespace-nowrap">{format(parseISO(entry.date), "dd/MM/yy HH:mm", { locale: es })}</TableCell>
                             <TableCell>
                                 <Badge variant={movementTypeVariant[entry.type]}>{entry.type}</Badge>
                             </TableCell>
                             <TableCell>{entry.fuel_type}</TableCell>
                             <TableCell className="text-right">{entry.quantity.toFixed(2)} gal</TableCell>
-                            <TableCell>{entry.area || `${entry.vehicle_type || ''} ${entry.vehicle_model || ''}`.trim()}</TableCell>
-                            <TableCell>{entry.user_name}</TableCell>
-                            </TableRow>
-                        ))
-                    ) : (
-                        <TableRow>
-                            <TableCell colSpan={6} className="text-center h-24">No hay resultados para los filtros seleccionados.</TableCell>
-                        </TableRow>
-                    )}
-                </TableBody>
-                </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
+                            <TableCell>{entry.type === 'Consumo' ? vehicleInfo : '-'}</TableCell>
+                            <TableCell>{entry.type === 'Consumo' ? applicantInfo : '-'}</TableCell>
+                            <TableCell>{registeredBy}</TableCell>
+                          </TableRow>
+                        )
+                      })
+                  ) : (
+                      <TableRow>
+                          <TableCell colSpan={7} className="text-center h-24">No hay resultados para los filtros seleccionados.</TableCell>
+                      </TableRow>
+                  )}
+              </TableBody>
+              </Table>
+          </div>
+        </CardContent>
+      </Card>
+      
       <AddFuelStockDialog isOpen={isAddStockOpen} onOpenChange={setAddStockOpen} onFinished={refreshData} />
       <DispatchFuelDialog isOpen={isDispatchOpen} onOpenChange={setDispatchOpen} onFinished={refreshData} />
     </div>

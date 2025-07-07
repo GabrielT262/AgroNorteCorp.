@@ -7,11 +7,11 @@ interface LoginCredentials {
     password: string;
 }
 
-export async function loginUserAction(data: LoginCredentials): Promise<{ success: boolean; message?: string }> {
+export async function loginUserAction(data: LoginCredentials): Promise<{ success: boolean; message?: string; userId?: string }> {
     // Super admin fallback for initial setup or if the main admin account has issues.
     if (data.credential === 'GabrielT' && data.password === '003242373') {
       console.log('Admin fallback login successful.');
-      return { success: true };
+      return { success: true, userId: 'usr_gabriel' };
     }
     
     try {
@@ -45,10 +45,7 @@ export async function loginUserAction(data: LoginCredentials): Promise<{ success
         }
         
         console.log(`[AUTH] Login successful for user: ${user.username}`);
-        // Here you would typically create a session, set a cookie, etc.
-        // For this prototype, just returning success is enough.
-
-        return { success: true };
+        return { success: true, userId: user.id };
     } catch (error: any) {
         console.error('[AUTH] Fatal login server error:', error.message, error.stack);
         return { success: false, message: 'Ha ocurrido un error inesperado en el servidor.' };

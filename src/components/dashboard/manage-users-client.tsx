@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { ManagedUser } from '@/lib/types';
+import type { ManagedUser, UserRole } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { deleteUserAction, approveUserAction } from '@/app/actions/user-actions';
 
@@ -25,9 +25,10 @@ import { CreateUserDialog } from './create-user-dialog';
 
 interface ManageUsersClientProps {
   initialUsers: ManagedUser[];
+  currentUser: ManagedUser;
 }
 
-export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
+export function ManageUsersClient({ initialUsers, currentUser }: ManageUsersClientProps) {
   const { toast } = useToast();
   const [isCreateDialogOpen, setCreateDialogOpen] = React.useState(false);
   const [editingUser, setEditingUser] = React.useState<ManagedUser | null>(null);
@@ -75,6 +76,20 @@ export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
     const mailtoLink = `mailto:${user.email}?subject=${subject}&body=${body}`;
     window.open(mailtoLink, '_blank');
   };
+  
+  const canManageUsers = currentUser.role === 'Administrador';
+  if (!canManageUsers) {
+      return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Acceso Denegado</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <p>No tienes permiso para gestionar usuarios.</p>
+            </CardContent>
+        </Card>
+      );
+  }
 
   return (
     <>
@@ -102,9 +117,8 @@ export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
                   <TableRow>
                     <TableHead>Usuario</TableHead>
                     <TableHead>Nombre Completo</TableHead>
-                    <TableHead>Correo</TableHead>
-                    <TableHead>Área</TableHead>
-                    <TableHead>Rol</TableHead>
+                    <TableHead>Contacto</TableHead>
+                    <TableHead>Área / Rol</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
@@ -114,8 +128,12 @@ export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
                     <TableRow key={user.id}>
                       <TableCell className="font-mono">{user.username}</TableCell>
                       <TableCell className="font-medium">{user.name} {user.last_name}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>{user.area}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                            <span>{user.email}</span>
+                            <span className="text-xs text-muted-foreground">{user.whatsapp_number}</span>
+                        </div>
+                      </TableCell>
                       <TableCell><Badge variant={user.role === 'Administrador' ? 'default' : 'secondary'}>{user.role}</Badge></TableCell>
                        <TableCell>
                         <Badge variant={user.status === 'active' ? 'secondary' : 'destructive'}>
@@ -149,7 +167,7 @@ export function ManageUsersClient({ initialUsers }: ManageUsersClientProps) {
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => setDeletingUser(user)} className="text-destructive focus:text-destructive" disabled={user.role === 'Administrador'}>
+                              <DropdownMenuItem onClick={() => setDeletingUser(user)} className="text-destructive focus:text-destructive" disabled={user.username === 'GabrielT'}>
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 <span>Eliminar</span>
                               </DropdownMenuItem>

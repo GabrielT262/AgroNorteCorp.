@@ -1,250 +1,269 @@
 
--- =================================================================================================
--- AgroNorte Corp - Supabase Schema
---
--- Instrucciones:
--- 1. Copia TODO el contenido de este archivo.
--- 2. Ve al editor SQL de tu proyecto de Supabase (SQL Editor -> New query).
--- 3. Pega el contenido y haz clic en "RUN".
---
--- Esto creará todas las tablas, relaciones, políticas de almacenamiento y datos iniciales.
--- Puedes ejecutar este script de forma segura varias veces; eliminará las tablas antiguas antes de crearlas de nuevo.
--- =================================================================================================
+-- Drop existing tables with cascade to handle dependencies
+drop table if exists public.company_settings cascade;
+drop table if exists public.fuel_history cascade;
+drop table if exists public.fuel_levels cascade;
+drop table if exists public.gallery_posts cascade;
+drop table if exists public.inventory_history cascade;
+drop table if exists public.inventory_items cascade;
+drop table if exists public.messages cascade;
+drop table if exists public.notifications cascade;
+drop table if exists public.orders cascade;
+drop table if exists public.communications cascade;
+drop table if exists public.registered_vehicles cascade;
+drop table if exists public.security_reports cascade;
+drop table if exists public.users cascade;
 
-
--- ============================================
--- 1. CONFIGURACIÓN DE ALMACENAMIENTO (STORAGE)
--- ============================================
--- Crea los buckets de almacenamiento si no existen.
--- NOTA: Debes marcar los buckets como públicos desde el panel de Supabase después de ejecutar este script.
--- Storage -> Buckets -> (tu bucket) -> Settings -> Public bucket.
-INSERT INTO storage.buckets (id, name, public) VALUES
-('products', 'products', true),
-('gallery', 'gallery', true),
-('avatars', 'avatars', true),
-('signatures', 'signatures', true),
-('company', 'company', true)
-ON CONFLICT (id) DO NOTHING;
-
-
--- Políticas de acceso para los buckets
--- Permite el acceso público de lectura a todos los buckets.
-CREATE POLICY "Public Read Access" ON storage.objects FOR SELECT USING (true);
-
--- Permite a los usuarios autenticados subir, actualizar y eliminar archivos en sus respectivos buckets.
-CREATE POLICY "Authenticated Write Access" ON storage.objects FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "Authenticated Update Access" ON storage.objects FOR UPDATE USING (auth.role() = 'authenticated');
-CREATE POLICY "Authenticated Delete Access" ON storage.objects FOR DELETE USING (auth.role() = 'authenticated');
-
-
--- ============================================
--- 2. ELIMINACIÓN DE TABLAS EXISTENTES (para re-ejecución limpia)
--- ============================================
-DROP TABLE IF EXISTS "notifications" CASCADE;
-DROP TABLE IF EXISTS "gallery_posts" CASCADE;
-DROP TABLE IF EXISTS "security_reports" CASCADE;
-DROP TABLE IF EXISTS "registered_vehicles" CASCADE;
-DROP TABLE IF EXISTS "fuel_history" CASCADE;
-DROP TABLE IF EXISTS "fuel_levels" CASCADE;
-DROP TABLE IF EXISTS "inventory_history" CASCADE;
-DROP TABLE IF EXISTS "orders" CASCADE;
-DROP TABLE IF EXISTS "inventory_items" CASCADE;
-DROP TABLE IF EXISTS "company_settings" CASCADE;
-DROP TABLE IF EXISTS "users" CASCADE;
-
-
--- ============================================
--- 3. CREACIÓN DE TABLAS
--- ============================================
-
--- Tabla de Usuarios
-CREATE TABLE users (
-    id TEXT PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
-    name TEXT NOT NULL,
-    last_name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    role TEXT NOT NULL DEFAULT 'Usuario' CHECK (role IN ('Administrador', 'Usuario')),
-    area TEXT NOT NULL CHECK (area IN ('Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG', 'Administrador')),
-    password TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('active', 'pending')),
-    avatar_url TEXT,
-    signature_url TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- Users table
+create table public.users (
+  id text primary key,
+  username text not null unique,
+  name text not null,
+  last_name text not null,
+  email text not null unique,
+  "password" text not null,
+  role text not null,
+  area text not null,
+  status text not null,
+  avatar_url text,
+  signature_url text,
+  whatsapp_number text
 );
+alter table public.users enable row level security;
+create policy "Allow all users to manage users" on public.users for all using (true);
 
--- Tabla de Configuración de la Empresa (solo una fila)
-CREATE TABLE company_settings (
-    id INT PRIMARY KEY DEFAULT 1,
-    support_whats_app TEXT,
-    logo_url TEXT,
-    login_bg_url TEXT
+-- Inventory Items table
+create table public.inventory_items (
+  id text primary key,
+  name text not null,
+  description text,
+  category text not null,
+  area text not null,
+  cultivo text,
+  location text not null,
+  unit text not null,
+  ai_hint text,
+  images text[],
+  technical_sheet_url text,
+  batches jsonb
 );
+alter table public.inventory_items enable row level security;
+create policy "Allow all users to manage inventory" on public.inventory_items for all using (true);
 
--- Tabla de Items de Inventario
-CREATE TABLE inventory_items (
-    id TEXT PRIMARY KEY, -- SKU
-    name TEXT NOT NULL,
-    description TEXT,
-    category TEXT NOT NULL CHECK (category IN ('Herramientas', 'Repuestos', 'Fertilizantes', 'Agroquímicos', 'Varios', 'Implementos de Riego', 'Implementos de SST')),
-    area TEXT NOT NULL,
-    cultivo TEXT CHECK (cultivo IN ('Uva', 'Palto')),
-    location TEXT,
-    unit TEXT NOT NULL CHECK (unit IN ('Unidad', 'Kg', 'Litros', 'Metros')),
-    ai_hint TEXT,
-    images TEXT[],
-    technical_sheet_url TEXT,
-    batches JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+
+-- Inventory History table
+create table public.inventory_history (
+  id text primary key,
+  date timestamp with time zone not null,
+  product_id text references public.inventory_items(id) on delete set null,
+  product_name text not null,
+  type text not null,
+  quantity numeric not null,
+  unit text not null,
+  requesting_area text not null,
+  user_id text references public.users(id),
+  order_id text,
+  lote_id text
 );
+alter table public.inventory_history enable row level security;
+create policy "Allow all users to manage inventory history" on public.inventory_history for all using (true);
 
--- Tabla de Pedidos
-CREATE TABLE orders (
-    id TEXT PRIMARY KEY,
-    date TIMESTAMPTZ NOT NULL,
-    items JSONB,
-    status TEXT NOT NULL CHECK (status IN ('Aprobado', 'Pendiente', 'Rechazado', 'Despachado')),
-    requesting_area TEXT NOT NULL,
-    requesting_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- Orders table
+create table public.orders (
+  id text primary key,
+  date timestamp with time zone not null,
+  items jsonb,
+  status text not null,
+  requesting_area text not null,
+  requesting_user_id text references public.users(id)
 );
+alter table public.orders enable row level security;
+create policy "Allow all authenticated users to manage orders" on public.orders for all using (true);
 
--- Tabla de Historial de Inventario
-CREATE TABLE inventory_history (
-    id TEXT PRIMARY KEY,
-    date TIMESTAMPTZ NOT NULL,
-    product_id TEXT REFERENCES inventory_items(id) ON DELETE SET NULL,
-    product_name TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('Entrada', 'Salida')),
-    quantity NUMERIC NOT NULL,
-    unit TEXT NOT NULL,
-    requesting_area TEXT NOT NULL,
-    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-    order_id TEXT,
-    lote_id TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- Communications table
+create table public.communications (
+  id text primary key,
+  title text not null,
+  description text not null,
+  date timestamp with time zone not null,
+  author_id text references public.users(id),
+  ai_hint text
 );
+alter table public.communications enable row level security;
+create policy "Allow all users to manage communications" on public.communications for all using (true);
 
--- Tabla de Niveles de Combustible
-CREATE TABLE fuel_levels (
-    fuel_type TEXT PRIMARY KEY CHECK (fuel_type IN ('Gasolina', 'Petróleo')),
-    level NUMERIC NOT NULL
+-- Gallery Posts table
+create table public.gallery_posts (
+  id text primary key,
+  title text not null,
+  description text not null,
+  author_id text references public.users(id),
+  author_area text not null,
+  date timestamp with time zone not null,
+  status text not null,
+  ai_hint text,
+  images text[]
 );
+alter table public.gallery_posts enable row level security;
+create policy "Allow all users to manage gallery posts" on public.gallery_posts for all using (true);
 
--- Tabla de Historial de Combustible
-CREATE TABLE fuel_history (
-    id TEXT PRIMARY KEY,
-    date TIMESTAMPTZ NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('Abastecimiento', 'Consumo')),
-    fuel_type TEXT NOT NULL CHECK (fuel_type IN ('Gasolina', 'Petróleo')),
-    quantity NUMERIC NOT NULL,
-    area TEXT,
-    user_name TEXT,
-    vehicle_type TEXT,
-    vehicle_model TEXT,
-    horometro NUMERIC,
-    kilometraje NUMERIC,
-    registered_by_id TEXT REFERENCES users(id) ON DELETE SET NULL
+-- Security Reports table
+create table public.security_reports (
+  id text primary key,
+  date timestamp with time zone not null,
+  title text not null,
+  description text not null,
+  type text not null,
+  author_id text references public.users(id),
+  status text not null,
+  meta jsonb,
+  photos text[]
 );
+alter table public.security_reports enable row level security;
+create policy "Allow all users to manage security reports" on public.security_reports for all using (true);
 
--- Tabla de Vehículos Registrados
-CREATE TABLE registered_vehicles (
-    id TEXT PRIMARY KEY,
-    employee_id TEXT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    employee_area TEXT NOT NULL,
-    vehicle_type TEXT NOT NULL,
-    vehicle_model TEXT NOT NULL,
-    vehicle_plate TEXT NOT NULL
+-- Registered Vehicles table
+create table public.registered_vehicles (
+  id text primary key,
+  employee_id text references public.users(id) unique,
+  employee_area text not null,
+  vehicle_type text not null,
+  vehicle_model text not null,
+  vehicle_plate text not null
 );
+alter table public.registered_vehicles enable row level security;
+create policy "Allow all users to manage registered vehicles" on public.registered_vehicles for all using (true);
 
--- Tabla de Reportes de Seguridad
-CREATE TABLE security_reports (
-    id TEXT PRIMARY KEY,
-    date TIMESTAMPTZ NOT NULL,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('Incidente', 'Novedad', 'Solicitud de Permiso', 'Ingreso de Proveedor', 'Ingreso Vehículo Trabajador')),
-    author_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-    status TEXT NOT NULL,
-    meta JSONB,
-    photos TEXT[]
+
+-- Fuel Levels table
+create table public.fuel_levels (
+  id serial primary key,
+  fuel_type text not null unique,
+  level numeric not null
 );
+alter table public.fuel_levels enable row level security;
+create policy "Allow all users to manage fuel levels" on public.fuel_levels for all using (true);
 
--- Tabla de Galería de Logros
-CREATE TABLE gallery_posts (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    author_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-    author_area TEXT NOT NULL,
-    date TIMESTAMPTZ NOT NULL,
-    status TEXT NOT NULL CHECK (status IN ('Pendiente', 'Aprobado', 'Rechazado')),
-    ai_hint TEXT,
-    images TEXT[]
+-- Fuel History table
+create table public.fuel_history (
+  id text primary key,
+  date timestamp with time zone not null,
+  type text not null,
+  fuel_type text not null,
+  quantity numeric not null,
+  area text,
+  user_name text,
+  vehicle_type text,
+  vehicle_model text,
+  registered_by_id text references public.users(id),
+  horometro numeric,
+  kilometraje numeric
 );
+alter table public.fuel_history enable row level security;
+create policy "Allow all users to manage fuel history" on public.fuel_history for all using (true);
 
--- Tabla de Comunicados
-CREATE TABLE communications (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    date TIMESTAMPTZ NOT NULL,
-    author_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-    ai_hint TEXT
+
+-- Company Settings table
+create table public.company_settings (
+  id int primary key,
+  support_whats_app text,
+  logo_url text,
+  login_bg_url text
 );
+alter table public.company_settings enable row level security;
+create policy "Allow all users to manage company settings" on public.company_settings for all using (true);
 
--- Tabla de Notificaciones
-CREATE TABLE notifications (
-    id TEXT PRIMARY KEY,
-    recipient_id TEXT NOT NULL, -- Puede ser un ID de usuario o un nombre de área/rol
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    path TEXT,
-    is_read BOOLEAN DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- Notifications table
+create table public.notifications (
+  id text primary key,
+  recipient_id text not null,
+  title text not null,
+  description text not null,
+  path text,
+  is_read boolean not null default false,
+  created_at timestamp with time zone default now() not null
 );
+alter table public.notifications enable row level security;
+create policy "Allow all authenticated users to read notifications" on public.notifications for select using (true);
+create policy "Allow users to insert notifications" on public.notifications for insert with check (true);
+create policy "Allow users to update their own notifications" on public.notifications for update using (true) with check (true);
 
 
--- ============================================
--- 4. INSERCIÓN DE DATOS INICIALES
--- ============================================
+-- Messages for real-time chat
+create table public.messages (
+  id text primary key,
+  created_at timestamp with time zone default now() not null,
+  sender_id text references public.users(id),
+  channel text not null,
+  content text not null
+);
+alter table public.messages enable row level security;
 
--- Usuario Administrador Principal
-INSERT INTO users (id, username, name, last_name, email, role, area, password, status) VALUES
-('usr_gabriel', 'GabrielT', 'Gabriel', 'Torres', 'gabriel.t@agronortecorp.com', 'Administrador', 'Administrador', '003242373', 'active')
-ON CONFLICT (id) DO NOTHING;
-
--- Configuración Inicial de la Empresa
-INSERT INTO company_settings (id, support_whats_app, logo_url, login_bg_url) VALUES
-(1, '51987654321', 'https://placehold.co/100x100.png', 'https://placehold.co/1920x1080.png')
-ON CONFLICT (id) DO UPDATE SET
-support_whats_app = EXCLUDED.support_whats_app,
-logo_url = EXCLUDED.logo_url,
-login_bg_url = EXCLUDED.login_bg_url;
+-- FIX: Changed insert policy to be permissive as app doesn't use Supabase Auth JWTs.
+create policy "Allow all users to read messages" on public.messages for select using (true);
+create policy "Allow all users to insert messages" on public.messages for insert with check (true);
 
 
--- Niveles Iniciales de Combustible
-INSERT INTO fuel_levels (fuel_type, level) VALUES
-('Gasolina', 50),
-('Petróleo', 800)
-ON CONFLICT (fuel_type) DO UPDATE SET level = EXCLUDED.level;
+-- Setup Storage Buckets Policies
+-- Note: Buckets must be created MANUALLY in the Supabase Dashboard.
+-- These policies assume buckets named: 'products', 'gallery', 'avatars', 'signatures', 'company' exist and are public.
+
+-- Products Bucket
+drop policy if exists "Allow public read access to products" on storage.objects;
+create policy "Allow public read access to products" on storage.objects for select using ( bucket_id = 'products' );
+drop policy if exists "Allow authenticated uploads to products" on storage.objects;
+create policy "Allow authenticated uploads to products" on storage.objects for insert with check ( bucket_id = 'products' );
+
+-- Gallery Bucket
+drop policy if exists "Allow public read access to gallery" on storage.objects;
+create policy "Allow public read access to gallery" on storage.objects for select using ( bucket_id = 'gallery' );
+drop policy if exists "Allow authenticated uploads to gallery" on storage.objects;
+create policy "Allow authenticated uploads to gallery" on storage.objects for insert with check ( bucket_id = 'gallery' );
+
+-- Avatars Bucket
+drop policy if exists "Allow public read access to avatars" on storage.objects;
+create policy "Allow public read access to avatars" on storage.objects for select using ( bucket_id = 'avatars' );
+drop policy if exists "Allow authenticated uploads to avatars" on storage.objects;
+create policy "Allow authenticated uploads to avatars" on storage.objects for insert with check ( bucket_id = 'avatars' );
+
+-- Signatures Bucket
+drop policy if exists "Allow public read access to signatures" on storage.objects;
+create policy "Allow public read access to signatures" on storage.objects for select using ( bucket_id = 'signatures' );
+drop policy if exists "Allow authenticated uploads to signatures" on storage.objects;
+create policy "Allow authenticated uploads to signatures" on storage.objects for insert with check ( bucket_id = 'signatures' );
+
+-- Company Bucket
+drop policy if exists "Allow public read access to company" on storage.objects;
+create policy "Allow public read access to company" on storage.objects for select using ( bucket_id = 'company' );
+drop policy if exists "Allow authenticated uploads to company" on storage.objects;
+create policy "Allow authenticated uploads to company" on storage.objects for insert with check ( bucket_id = 'company' );
 
 
--- ============================================
--- 5. HABILITAR ROW LEVEL SECURITY (RLS)
--- ============================================
--- Se recomienda habilitar RLS en todas las tablas y definir políticas explícitas.
--- Por simplicidad en este prototipo, las dejamos deshabilitadas, pero en producción es crucial.
--- Ejemplo de cómo habilitar RLS para una tabla:
--- ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+-- Seed initial data
 
--- Ejemplo de política (permitir a los usuarios ver solo su propia información):
--- CREATE POLICY "User can see own data" ON users
--- FOR SELECT USING (auth.uid()::text = id);
---
--- CREATE POLICY "User can update own data" ON users
--- FOR UPDATE USING (auth.uid()::text = id);
+-- Admin user
+insert into public.users (id, username, name, last_name, email, password, role, area, status, whatsapp_number)
+values
+  ('usr_gabriel', 'GabrielT', 'Gabriel', 'T', 'admin@agronorte.com', '003242373', 'Administrador', 'Administrador', 'active', '51999888777'),
+  ('usr_ana_g', 'AnaG', 'Ana', 'G', 'gerencia@agronorte.com', 'password123', 'Gerencia', 'Gerencia', 'active', '51987654321'),
+  ('usr_carlos_p', 'CarlosP', 'Carlos', 'P', 'almacen@agronorte.com', 'password123', 'Almacén', 'Almacén', 'active', '51912345678'),
+  ('usr_juan_v', 'JuanV', 'Juan', 'V', 'produccion@agronorte.com', 'password123', 'Producción', 'Producción', 'active', '51998765432'),
+  ('usr_seguridad', 'SeguridadV', 'Seguridad', 'Vigilante', 'seguridad@agronorte.com', 'password123', 'Seguridad Patrimonial', 'Seguridad Patrimonial', 'active', '51955555555');
 
--- ============================================
--- Script finalizado.
--- ============================================
+
+-- Company Settings
+insert into public.company_settings (id, support_whats_app, logo_url, login_bg_url)
+values (1, '+51987654321', null, null);
+
+-- Fuel Levels
+insert into public.fuel_levels (fuel_type, level)
+values ('Gasolina', 70), ('Petróleo', 1000);
+
+
+-- Enable Realtime
+-- This is a simplified approach. In a production environment, you might be more selective.
+drop publication if exists supabase_realtime;
+create publication supabase_realtime;
+
+alter publication supabase_realtime add table public.notifications;
+alter publication supabase_realtime add table public.messages;

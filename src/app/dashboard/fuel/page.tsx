@@ -1,23 +1,24 @@
 'use server';
 
 import * as React from 'react';
-import { getFuelHistory, getFuelLevels } from '@/lib/db';
-import type { User } from '@/lib/types';
+import { getFuelHistory, getFuelLevels, getCurrentUser } from '@/lib/db';
 import { FuelClient } from './fuel-client';
+import DashboardProvider from '../dashboard-provider';
 
-const currentUser: User = { name: 'Gabriel T', role: 'Administrador', area: 'Administrador' };
-
-export default async function FuelPage() {
+export default async function FuelPage({ searchParams }: { searchParams: { userId?: string } }) {
+    const currentUser = await getCurrentUser(searchParams.userId);
     const [history, levels] = await Promise.all([
         getFuelHistory(),
         getFuelLevels(),
     ]);
 
     return (
-        <FuelClient 
-            initialHistory={history}
-            initialLevels={levels}
-            currentUser={currentUser}
-        />
+        <DashboardProvider searchParams={searchParams}>
+            <FuelClient 
+                initialHistory={history}
+                initialLevels={levels}
+                currentUser={currentUser}
+            />
+        </DashboardProvider>
     );
 }

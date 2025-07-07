@@ -26,6 +26,7 @@ import {
   LifeBuoy,
   LogOut,
   Menu,
+  MessageSquare,
   Package,
   Paintbrush,
   Search,
@@ -37,7 +38,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { ManagedUser } from "@/lib/types";
+import type { ManagedUser, UserRole } from "@/lib/types";
 import { useOrder } from "@/context/order-context";
 import { OrderSheet } from "@/components/dashboard/order-sheet";
 import { SupportDialog } from "@/components/dashboard/support-dialog";
@@ -69,34 +70,39 @@ export function DashboardLayoutContent({ currentUser, children }: { currentUser:
   const { settings } = useCompanySettings();
   const [globalSearchTerm, setGlobalSearchTerm] = React.useState('');
 
+  const createLink = (basePath: string) => {
+    const path = basePath === '/dashboard' ? '/dashboard' : `${basePath}`;
+    return `${path}?userId=${currentUser.id}`;
+  };
+
   const handleNavigate = (path: string) => {
     router.push(path);
   };
   
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (globalSearchTerm.trim()) {
-      router.push(`/dashboard/inventory?q=${encodeURIComponent(globalSearchTerm.trim())}`);
-    } else {
-      router.push('/dashboard/inventory');
-    }
+    const newPath = globalSearchTerm.trim()
+      ? `/dashboard/inventory?q=${encodeURIComponent(globalSearchTerm.trim())}`
+      : '/dashboard/inventory';
+    router.push(createLink(newPath));
   };
   
-  const allRolesAndAreas = ['Administrador', 'Usuario', 'Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG'];
+  const allRoles: UserRole[] = ['Administrador', 'Gerencia', 'Logística', 'RR.HH', 'Seguridad Patrimonial', 'Almacén', 'Taller', 'Producción', 'Sanidad', 'SS.GG'];
 
   const allNavLinks = [
-    { href: "/dashboard", label: "Inicio", icon: Home, active: pathname === "/dashboard", roles: allRolesAndAreas },
-    { href: "/dashboard/inventory", label: "Inventario", icon: Package, active: pathname.startsWith("/dashboard/inventory"), roles: allRolesAndAreas },
-    { href: "/dashboard/requests", label: "Solicitudes", icon: ShoppingCart, active: pathname.startsWith("/dashboard/requests"), roles: allRolesAndAreas },
-    { href: "/dashboard/fuel", label: "Combustible", icon: Fuel, active: pathname.startsWith("/dashboard/fuel"), roles: ['Administrador', 'Gerencia', 'Logística', 'Almacén'] },
-    { href: "/dashboard/security-reports", label: "Reportes de Seguridad", icon: ShieldCheck, active: pathname.startsWith("/dashboard/security-reports"), roles: ['Administrador', 'Gerencia', 'Seguridad Patrimonial'] },
-    { href: "/dashboard/gallery", label: "Galería De Logros", icon: GalleryHorizontal, active: pathname.startsWith("/dashboard/gallery"), roles: allRolesAndAreas },
-    { href: "/dashboard/communications", label: "Comunicados", icon: Megaphone, active: pathname.startsWith("/dashboard/communications"), roles: allRolesAndAreas },
+    { href: "/dashboard", label: "Inicio", icon: Home, active: pathname === "/dashboard", roles: allRoles },
+    { href: "/dashboard/inventory", label: "Inventario", icon: Package, active: pathname.startsWith("/dashboard/inventory"), roles: allRoles },
+    { href: "/dashboard/requests", label: "Solicitudes", icon: ShoppingCart, active: pathname.startsWith("/dashboard/requests"), roles: allRoles },
+    { href: "/dashboard/fuel", label: "Combustible", icon: Fuel, active: pathname.startsWith("/dashboard/fuel"), roles: allRoles },
+    { href: "/dashboard/security-reports", label: "Reportes de Seguridad", icon: ShieldCheck, active: pathname.startsWith("/dashboard/security-reports"), roles: ['Administrador', 'Seguridad Patrimonial'] },
+    { href: "/dashboard/gallery", label: "Galería De Logros", icon: GalleryHorizontal, active: pathname.startsWith("/dashboard/gallery"), roles: allRoles },
+    { href: "/dashboard/communications", label: "Comunicados", icon: Megaphone, active: pathname.startsWith("/dashboard/communications"), roles: allRoles },
+    { href: "/dashboard/chat", label: "Chat Interno", icon: MessageSquare, active: pathname.startsWith("/dashboard/chat"), roles: allRoles },
     { href: "/dashboard/manage-users", label: "Gestionar Usuarios", icon: Users, active: pathname.startsWith("/dashboard/manage-users"), roles: ['Administrador'] },
     { href: "/dashboard/company-settings", label: "Personalización", icon: Paintbrush, active: pathname.startsWith("/dashboard/company-settings"), roles: ['Administrador'] },
   ];
   
-  const navLinks = allNavLinks.filter(link => link.roles.includes(currentUser.role) || link.roles.includes(currentUser.area));
+  const navLinks = allNavLinks.filter(link => link.roles.includes(currentUser.role));
 
   return (
     <>
@@ -104,13 +110,15 @@ export function DashboardLayoutContent({ currentUser, children }: { currentUser:
       <div className="hidden border-r bg-muted/40 md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-            <Link href="/dashboard" className="flex items-center gap-3 font-semibold">
-              {settings.logo_url ? (
-                <Image src={settings.logo_url} alt="Logo de la Empresa" width={36} height={36} className="h-9 w-9 object-contain" />
-              ) : (
-                <Leaf className="h-9 w-9 text-primary" />
-              )}
-              <span className="text-xl font-headline whitespace-nowrap">Agro Norte Corp</span>
+            <Link href={createLink("/dashboard")} className="flex items-center gap-3 font-semibold">
+              <div className="relative h-9 w-9 overflow-hidden rounded-md">
+                {settings.logo_url ? (
+                  <Image src={settings.logo_url} alt="Logo de la Empresa" fill className="object-cover rounded-md" />
+                ) : (
+                  <Leaf className="h-full w-full text-primary p-1" />
+                )}
+              </div>
+              <span className="text-xl font-semibold whitespace-nowrap">Agro Norte Corp</span>
             </Link>
           </div>
           <div className="flex-1">
@@ -118,7 +126,7 @@ export function DashboardLayoutContent({ currentUser, children }: { currentUser:
               {navLinks.map((link) => (
                 <Link
                   key={link.label}
-                  href={link.href}
+                  href={createLink(link.href)}
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary",
                     link.active && "bg-muted text-primary",
@@ -151,20 +159,22 @@ export function DashboardLayoutContent({ currentUser, children }: { currentUser:
                 </SheetHeader>
               <nav className="grid gap-2 text-lg font-medium">
                 <Link
-                  href="/dashboard"
+                  href={createLink("/dashboard")}
                   className="flex items-center gap-3 text-lg font-semibold mb-4"
                 >
-                   {settings.logo_url ? (
-                    <Image src={settings.logo_url} alt="Logo de la Empresa" width={36} height={36} className="h-9 w-9 object-contain" />
-                  ) : (
-                    <Leaf className="h-9 w-9 text-primary" />
-                  )}
-                  <span className="text-xl font-headline whitespace-nowrap">Agro Norte Corp</span>
+                   <div className="relative h-9 w-9 overflow-hidden rounded-md">
+                    {settings.logo_url ? (
+                      <Image src={settings.logo_url} alt="Logo de la Empresa" fill className="object-cover rounded-md" />
+                    ) : (
+                      <Leaf className="h-full w-full text-primary p-1" />
+                    )}
+                   </div>
+                  <span className="text-xl font-semibold whitespace-nowrap">Agro Norte Corp</span>
                 </Link>
                 {navLinks.map((link) => (
                   <Link
                     key={link.label}
-                    href={link.href}
+                    href={createLink(link.href)}
                     className={cn(
                       "mx-[-0.65rem] flex items-center gap-4 rounded-xl px-3 py-2 text-muted-foreground hover:text-foreground",
                       link.active && "bg-muted text-foreground",
@@ -206,7 +216,7 @@ export function DashboardLayoutContent({ currentUser, children }: { currentUser:
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Mi Cuenta ({currentUser.role})</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => handleNavigate('/dashboard/settings')}>
+              <DropdownMenuItem onClick={() => handleNavigate(createLink('/dashboard/settings'))}>
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Ajustes</span>
               </DropdownMenuItem>

@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -18,12 +19,21 @@ import {
 import type { Notification, ManagedUser } from '@/lib/types';
 import { getNotificationsForUserAction, markNotificationAsReadAction } from '@/app/actions/notification-actions';
 import { supabase } from '@/lib/supabase';
+import { useCompanySettings } from '@/context/company-settings-context';
 
 export function NotificationBell({ currentUser }: { currentUser: Omit<ManagedUser, 'password'> }) {
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const router = useRouter();
   const { toast } = useToast();
+  const { settings } = useCompanySettings();
+
+  // Request notification permission on mount
+  React.useEffect(() => {
+    if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission();
+    }
+  }, []);
 
   const fetchNotifications = React.useCallback(async () => {
     setIsLoading(true);
@@ -57,11 +67,27 @@ export function NotificationBell({ currentUser }: { currentUser: Omit<ManagedUse
           filter: `recipient_id=in.(${currentUser.area},Administrador)`
         },
         (payload) => {
+          const newNotification = payload.new as Notification;
           toast({
             title: 'Nueva Notificación',
-            description: (payload.new as Notification).title,
+            description: newNotification.title,
           });
-          setNotifications(prev => [payload.new as Notification, ...prev]);
+          setNotifications(prev => [newNotification, ...prev]);
+
+          // Show desktop notification
+          if ("Notification" in window && Notification.permission === "granted") {
+            const defaultIcon = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>';
+            const notification = new Notification(newNotification.title, {
+                body: newNotification.description,
+                icon: settings.logo_url || defaultIcon
+            });
+            notification.onclick = () => {
+                window.focus();
+                if(newNotification.path) {
+                    router.push(newNotification.path);
+                }
+            };
+          }
         }
       )
       .subscribe((status, err) => {
@@ -84,7 +110,7 @@ export function NotificationBell({ currentUser }: { currentUser: Omit<ManagedUse
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser.area, fetchNotifications, toast]);
+  }, [currentUser.area, fetchNotifications, toast, router, settings.logo_url]);
 
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
@@ -126,7 +152,7 @@ export function NotificationBell({ currentUser }: { currentUser: Omit<ManagedUse
             <DropdownMenuItem
               key={notification.id}
               onClick={() => handleNotificationClick(notification)}
-              className={`flex flex-col items-start gap-1 whitespace-normal cursor-pointer ${!notification.is_read ? 'bg-accent' : ''}`}
+              className={`flex flex-col items-start gap-1 whitespace-normal cursor-pointer ${!notification.is_read ? 'bg-accent/20' : ''}`}
             >
               <p className="font-semibold">{notification.title}</p>
               <p className="text-xs text-muted-foreground">{notification.description}</p>

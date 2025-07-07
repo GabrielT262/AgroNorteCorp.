@@ -1,6 +1,5 @@
 
-
-"use client";
+'use client';
 
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
@@ -13,10 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { InventoryItem, InventoryCategory, User, UserArea, InventoryCultivo, InventoryUnit, InventoryHistoryEntry } from "@/lib/types";
+import type { InventoryItem, InventoryCategory, UserRole, UserArea, InventoryCultivo, InventoryUnit, InventoryHistoryEntry, ManagedUser } from "@/lib/types";
 import { CreateProductDialog } from "@/components/dashboard/create-product-dialog";
 import { ProductDetailDialog } from "@/components/dashboard/product-detail-dialog";
-import { PlusCircle, Search, Upload, Download, History } from "lucide-react";
+import { PlusCircle, Search, Upload, Download, History, Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProductCard } from "@/components/dashboard/product-card";
 import {
@@ -32,16 +31,17 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from "xlsx";
 import { InventoryHistoryDialog } from "./inventory-history-dialog";
-import { deleteProductAction } from "@/app/actions/inventory-actions";
+import { deleteProductAction, importInventoryAction } from "@/app/actions/inventory-actions";
 import { AddStockDialog } from "./add-stock-dialog";
 
 
 interface InventoryClientProps {
   inventory: InventoryItem[];
   history: InventoryHistoryEntry[];
+  currentUser: ManagedUser;
 }
 
-export function InventoryClient({ inventory, history }: InventoryClientProps) {
+export function InventoryClient({ inventory, history, currentUser }: InventoryClientProps) {
   const searchParams = useSearchParams();
   const [search, setSearch] = React.useState(searchParams.get("q") || "");
   const [category, setCategory] = React.useState("Todos");
@@ -52,14 +52,15 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
   const [viewingItem, setViewingItem] = React.useState<InventoryItem | null>(null);
   const [deletingItem, setDeletingItem] = React.useState<InventoryItem | null>(null);
   const [isHistoryDialogOpen, setHistoryDialogOpen] = React.useState(false);
+  const [isImporting, startImportTransition] = React.useTransition();
   const { toast } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   
-  const currentUser: User = { name: 'Admin', role: 'Administrador', area: 'Administrador' };
-  const canManageProductsAreas: UserArea[] = ['Logística', 'Almacén', 'Administrador', 'Gerencia'];
-  const canManageProducts = canManageProductsAreas.includes(currentUser.area) || currentUser.role === 'Administrador';
-  const canViewHistoryAreas: UserArea[] = ['Gerencia', 'Logística', 'Almacén', 'Administrador'];
-  const canViewHistory = canViewHistoryAreas.includes(currentUser.area) || currentUser.role === 'Administrador';
+  const canManageProductsRoles: UserRole[] = ['Logística', 'Almacén', 'Administrador'];
+  const canViewHistoryRoles: UserRole[] = ['Gerencia', 'Logística', 'Almacén', 'Administrador'];
+  
+  const canManageProducts = canManageProductsRoles.includes(currentUser.role);
+  const canViewHistory = canViewHistoryRoles.includes(currentUser.role);
 
   React.useEffect(() => {
     setSearch(searchParams.get('q') || '');
@@ -84,8 +85,6 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
   };
 
   const handleEdit = (item: InventoryItem) => {
-    // Editing core product info can be added here.
-    // For now, we only view details.
     setViewingItem(item);
   };
 
@@ -144,7 +143,48 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
   };
   
   const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    toast({ title: "Función no implementada", description: "La importación de lotes se añadirá en una futura actualización.", variant: "default" });
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    startImportTransition(async () => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const data = e.target?.result;
+          const workbook = XLSX.read(data, { type: 'binary', cellDates: true });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(worksheet);
+          
+          const result = await importInventoryAction(json);
+
+          if (result.success) {
+            toast({
+              title: "Importación Exitosa",
+              description: `Se procesaron ${result.processed} productos. ${result.created} creados, ${result.updated} actualizados.`,
+            });
+          } else {
+            toast({
+              title: `Importación completada con ${result.errors} errores`,
+              description: result.message,
+              variant: "destructive",
+            });
+          }
+        } catch (error) {
+          console.error('Error parsing Excel file:', error);
+          toast({
+            title: "Error de Archivo",
+            description: "No se pudo leer o procesar el archivo Excel.",
+            variant: "destructive",
+          });
+        }
+      };
+      reader.readAsBinaryString(file);
+    });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   return (
@@ -171,8 +211,8 @@ export function InventoryClient({ inventory, history }: InventoryClientProps) {
                     )}
                      {canManageProducts && (
                       <>
-                        <Button variant="outline" onClick={handleImportClick}>
-                          <Upload className="mr-2 h-4 w-4" />
+                        <Button variant="outline" onClick={handleImportClick} disabled={isImporting}>
+                          {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                           Importar
                         </Button>
                         <input 
